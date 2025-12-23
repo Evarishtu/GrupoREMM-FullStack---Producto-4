@@ -1,0 +1,65 @@
+@import url("login.css");
+@import url("formularios_tablas.css");
+@import url("variables.css");
+@import url("dashboard.css");
+@import url("navbar.css");
+@import url("fade_in.css");
+
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: var(--fuente-principal);
+    background-color: var(--color-blanco);
+    color: var(--color-texto);
+    overflow-x: hidden;
+}
+
+.container {
+    max-width: var(--ancho-maximo-container);
+}
+
+/* Títulos */
+
+h1 {
+    font-size: var(--font-size-h1);
+    font-weight: var(--font-weight-bold); 
+    color: var(--color-principal);
+    margin-top: 100px;
+}
+
+h2 {
+    font-size: var(--font-size-h2);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-principal);
+}
+
+/* Botones */
+
+.bg-custom-blue {
+    background-color: var(--color-principal);
+    border-color: var(--color-principal);
+    color: var(--color-blanco);
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.bg-custom-blue:hover {
+    background-color: #2b356e;
+    border-color: #2b356e;
+}
+
+
+@media (min-width: 768px) {
+    .container {
+        margin-top: var(--altura-menu, 60px);
+    }
+
+    h1 {
+       padding: 40px 0;
+    }
+}
+

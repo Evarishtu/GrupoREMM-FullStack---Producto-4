@@ -1,0 +1,39 @@
+{
+  "name": "gruporemm-fullstack---producto-4",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "docs": "jsdoc -c jsdoc.json",
+    "docs:dev": "jsdoc -c jsdoc.json --verbose"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Evarishtu/GrupoREMM-FullStack---Producto-3.git"
+  },
+  "keywords": [],
+  "author": "Grupo REMM",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Evarishtu/GrupoREMM-FullStack---Producto-3/issues"
+  },
+  "homepage": "https://github.com/Evarishtu/GrupoREMM-FullStack---Producto-3#readme",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "body-parser": "^2.2.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^4.18.2",
+    "express-graphql": "^0.12.0",
+    "graphql": "^15.10.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.0.2"
+  },
+  "devDependencies": {
+    "jsdoc": "^4.0.5",
+    "nodemon": "^3.1.11"
+  }
+}
