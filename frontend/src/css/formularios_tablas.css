@@ -1,0 +1,104 @@
+.container {
+    max-width: var(--ancho-maximo-container) 
+}
+
+.contenedor-alta fieldset {
+    border: 1px solid var(--color-principal); 
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+}
+
+.contenedor-alta legend {
+    font-size: 1.25rem;
+    font-weight: 500;
+    color: var(--color-principal);
+    padding: 0 0.5rem;
+}
+
+.contenedor-alta label {
+    font-weight: 500;
+    display: block; 
+    margin-bottom: 0.25rem;
+}
+
+.contenedor-alta .form-control {
+    border-color: var(--color-borde-input);
+    border-radius: 0.25rem;
+    height: 40px;
+}
+
+.contenedor-consulta {
+    margin-top: 2rem; 
+}
+
+.consulta {
+    width: 100%;
+    border-collapse: collapse; 
+    font-size: 0.9rem;
+}
+
+.consulta thead th {
+    background-color: var(--color-principal);
+    color: var(--color-blanco);
+    padding: 0.75rem;
+    text-align: left;
+    font-weight: var(--font-weight-semi-bold);
+    border: none; 
+}
+
+.consulta .table-striped > tbody > tr:nth-of-type(odd) > * {
+    background-color: var(--color-gris-claro);
+}
+
+.consulta tbody td {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--color-gris-claro) 
+}
+
+/* Botón de Borrar */
+.consulta .btn-danger {
+    background-color: var(--color-rojo); 
+    border-color: var(--color-rojo);
+    padding: 0.25rem 0.75rem;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+}
+
+.error-con-icono::before {
+    content: "\f06a"; 
+    font-family: "Font Awesome 6 Free"; 
+    font-weight: var(--font-weight-bold); 
+    margin-right: 0.5rem;
+    color: inherit; 
+}
+
+.error-con-icono {
+    font-weight: var(--font-weight-semi-bold); 
+}
+
+#alertaErrores ul {
+    margin-top: 0.5rem;
+    margin-bottom: 0;
+    padding-left: 20px;
+}
+
+
+@media (min-width: 768px) {
+    .contenedor-consulta {
+        margin-top: 0; 
+    }
+    
+    .alta-consulta {
+        display: flex;
+        align-items: flex-start; 
+    }
+    
+    .consulta thead th:last-child {
+        width: 100px; 
+    }
+
+    .contenedor-alta fieldset {
+        min-height: 400px; 
+        background: var(--color-gris-claro);
+    }
+}

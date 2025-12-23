@@ -1,0 +1,50 @@
+:root {
+
+     /* Colores Principales */
+    --color-principal: #0E1353; 
+    --color-secundario: #040731; 
+    --color-tarjeta-oferta: #0E1353; 
+    --color-tarjeta-peticion: #330328; 
+
+    /* Colores de Texto y Fondo */
+    --color-texto: #333; 
+    --color-negro: #131313;
+    --color-blanco: #ffffff;
+    --color-blanco-oscuro: #faecec;
+    --color-gris-claro: #faf9f7;
+    --color-gris-intermedio: #ccc;
+    --color-gris: #696969;
+    --color-azul: #424e68;
+    --color-borde-input: #ccc;
+
+    /* Colores Alert */
+    --color-rojo: #dc3545;
+  
+
+    /* Pesos de Fuente */      
+    --font-weight-light: 300;
+    --font-weight-regular: 400;
+    --font-weight-medium: 500;
+    --font-weight-semi-bold: 700;
+    --font-weight-bold: 900;
+
+    /* Tamaños de Fuente */
+    --font-size-base: 1rem; 
+    --font-size-sm: 0.875rem; 
+    --font-size-lg: 1.125rem; 
+    --font-size-bg: 1.4rem;
+
+    /* Tamaños de Encabezados */
+    --font-size-h1: 2.5rem; 
+    --font-size-h2: 1.5rem; 
+
+    /* z-index */
+    --z-index-1: 1;
+    --z-index-2: 2;
+    --z-index-3: 3;
+
+    /* Otros */
+    --altura-menu: 60px;
+    --ancho-maximo-container: 1200px;
+    --fuente-principal: 'Montserrat', sans-serif; 
+}
