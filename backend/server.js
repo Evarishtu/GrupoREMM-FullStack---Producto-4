@@ -20,6 +20,7 @@ import { fileURLToPath } from "url";
 
 import { schema } from "./graphql/schema.js";
 import { root } from "./graphql/resolvers.js";
+import { connectMongo } from "./database/mongoose.js";
 
 
 /** @typedef {Object} Express */
@@ -35,7 +36,7 @@ const app = express();
  * Usa la variable de entorno PORT o 3000 por defecto.
  * @type {number|string}
  */
-const port = process.env.PORT;
+const port = process.env.PORT || 3000;
 
 /**
  * Middleware para parsear cuerpos JSON en las peticiones entrantes.
@@ -68,7 +69,7 @@ app.use((req, res, next) => {
 
   if (token) {
     try {
-      req.user = jwt.verify(token, process.env.JWT_SECRET || "dev_secret");
+      req.user = jwt.verify(token, process.env.JWT_SECRET);
     } catch (err) {
       req.user = null;
     }
@@ -96,6 +97,13 @@ app.use(
 /**
  * Inicia el servidor HTTP escuchando en el puerto configurado.
  */
-app.listen(port, () => {
-  console.log(`Servidor escuchando en http://localhost:${port}`);
-});
+
+async function startServer() {
+  await connectMongo();
+
+  app.listen(port, () => {
+    console.log(`Servidor escuchando en http://localhost:${port}`);
+  });
+}
+
+startServer();

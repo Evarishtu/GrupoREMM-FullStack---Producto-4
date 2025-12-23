@@ -5,7 +5,7 @@ import User from "./User.js";
 * Recupera todos los usuarios
 * @returns {Promise<Array>}   
 */
-export async function gettAllUsuarios(){
+export async function getAllUsuarios(){
     return User.find({}, {password: 0});
 }
 
