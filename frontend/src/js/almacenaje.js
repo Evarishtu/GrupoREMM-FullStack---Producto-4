@@ -1,127 +1,93 @@
-// const CLAVE_USUARIOS = 'usuarios';
+var GRAPHQL_ENDPOINT = window.GRAPHQL_ENDPOINT || 'https://localhost:4000/graphql';
+window.GRAPHQL_ENDPOINT = GRAPHQL_ENDPOINT;
 const CLAVE_USUARIO_ACTIVO = 'usuarioActivo';
 
-/** Definición del helpler común para GraphQL */
+async function graphqlRequest(query, variables = {}) {
+  const token = localStorage.getItem('jwt');
+  const headers = {
+    'Content-Type': 'application/json'
+  };
 
-const GRAPHQL_URL = "http://localhost:3000/graphql";
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
 
-function fetchGraphQL(query, variables = {}) {
-  const token = localStorage.getItem("token");
+  const response = await fetch(GRAPHQL_ENDPOINT, {
+    method: 'POST',
+    headers,
+    credentials: 'include',
+    body: JSON.stringify({ query, variables })
+  });
 
-  return fetch(GRAPHQL_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { "Authorization": "Bearer " + token } : {})
-    },
-    body: JSON.stringify({
-      query,
-      variables
-    })
-  }).then(res => res.json());
+  const result = await response.json();
+  if (result.errors) {
+    throw new Error(result.errors.map((e) => e.message).join('\n'));
+  }
+  return result.data;
 }
 
 /**
- * Inicializa los usuarios en localStorage SOLO si:
- * - No existe aún la clave "usuarios"
- * - Y existe el array global "usuarios" definido en data.js
+ * Obtiene la lista completa de usuarios desde el backend.
+ * @returns {Promise<Array<Object>>} Lista de usuarios.
  */
-function inicializarUsuariosSiVacio() {
-  try {
-    const guardados = localStorage.getItem(CLAVE_USUARIOS);
-
-    if (!guardados && Array.isArray(window.usuarios)) {
-      localStorage.setItem(CLAVE_USUARIOS, JSON.stringify(window.usuarios));
+async function obtenerUsuarios() {
+  const query = `
+    query Usuarios {
+      usuarios {
+        id
+        nombre
+        email
+        role
+      }
     }
-  } catch (error) {
-    console.error('Error al inicializar usuarios en localStorage:', error);
-  }
+  `;
+  const data = await graphqlRequest(query);
+  return data.usuarios || [];
 }
 
 /**
- * Obtiene la lista completa de usuarios desde localStorage.
- * @returns {Array<Object>} Lista de objetos de usuario, o un array vacío si no hay datos o hay un error.
- */
-function obtenerUsuarios() {
-  try {
-    const data = localStorage.getItem(CLAVE_USUARIOS);
-    if (!data) {
-      return [];
-    }
-    const lista = JSON.parse(data);
-    return Array.isArray(lista) ? lista : [];
-  } catch (error) {
-    console.error('Error al leer usuarios de localStorage:', error);
-    return [];
-  }
-}
-
-/**
- * Guarda la lista de usuarios en localStorage, sobrescribiendo el contenido existente.
- * @param {Array<Object>} lista - La lista de usuarios a guardar.
- */
-function guardarUsuarios(lista) {
-  try {
-    localStorage.setItem(CLAVE_USUARIOS, JSON.stringify(lista));
-  } catch (error) {
-    console.error('Error al guardar usuarios en localStorage:', error);
-  }
-}
-
-/**
- * Crea un nuevo usuario y lo añade a la lista almacenada en localStorage.
+ * Crea un nuevo usuario en el backend.
  * @param {Object} usuario - El objeto del nuevo usuario ({nombre, email, password}).
  */
-function crearUsuario(usuario) {
-  const lista = obtenerUsuarios();
-  lista.push(usuario);
-  guardarUsuarios(lista);
+async function crearUsuario(usuario) {
+  const mutation = `
+    mutation CrearUsuario($nombre: String!, $email: String!, $password: String!) {
+      crearUsuario(nombre: $nombre, email: $email, password: $password) {
+        id
+        nombre
+        email
+        role
+      }
+    }
+  `;
+  const data = await graphqlRequest(mutation, usuario);
+  return data.crearUsuario;
 }
 
 /**
- * Borra un usuario de la lista almacenada usando su índice en el array.
+ * Borra un usuario usando su índice en el listado del backend.
  * @param {number} indice - El índice del usuario a borrar.
  */
-function borrarUsuarioPorIndice(indice) {
-    const lista = obtenerUsuarios();
-    
-    if (indice >= 0 && indice < lista.length) {
-        // Obtener el nombre del usuario a borrar antes de eliminarlo
-        const usuarioBorrado = lista[indice].nombre; 
-        
-        // Eliminar el usuario
-        lista.splice(indice, 1);
-        guardarUsuarios(lista);
-
-        //  Si el usuario borrado era el activo, cerrar sesión
-        if (usuarioBorrado === obtenerUsuarioActivo()) {
-            limpiarUsuarioActivo();
-        }
+async function borrarUsuarioPorIndice(indice) {
+  const mutation = `
+    mutation BorrarUsuarioPorIndice($indice: Int!) {
+      borrarUsuarioPorIndice(indice: $indice)
     }
+  `;
+  await graphqlRequest(mutation, { indice });
 }
 
 /**
- * Borra un usuario de la lista almacenada usando su dirección de email.
+ * Borra un usuario usando su dirección de email.
  * @param {string} email - El email del usuario a borrar.
  */
-function borrarUsuarioPorEmail(email) {
-    const lista = obtenerUsuarios();
-    
-    // Buscar el usuario a borrar para ver si es el activo
-    const usuarioABorrar = lista.find(u => u.email === email);
-    const nombreUsuarioABorrar = usuarioABorrar ? usuarioABorrar.nombre : null;
-
-    // Filtrar la lista
-    const filtrados = lista.filter(function (u) {
-        return u.email !== email;
-    });
-    
-    guardarUsuarios(filtrados);
-
-    // Si el usuario borrado era el activo, cerrar sesión
-    if (nombreUsuarioABorrar && nombreUsuarioABorrar === obtenerUsuarioActivo()) {
-        limpiarUsuarioActivo();
+async function borrarUsuarioPorEmail(email) {
+  const mutation = `
+    mutation BorrarUsuarioPorEmail($email: String!) {
+      borrarUsuarioPorEmail(email: $email)
     }
+  `;
+  await graphqlRequest(mutation, { email });
 }
 
 /**
@@ -129,11 +95,9 @@ function borrarUsuarioPorEmail(email) {
  * @param {string} email - El email a verificar.
  * @returns {boolean} True si el email ya existe, False en caso contrario.
  */
-function existeEmailUsuario(email) {
-  const lista = obtenerUsuarios();
-  return lista.some(function (u) {
-    return u.email === email;
-  });
+async function existeEmailUsuario(email) {
+  const lista = await obtenerUsuarios();
+  return lista.some((u) => u.email === email);
 }
 
 /**
@@ -179,42 +143,20 @@ function limpiarUsuarioActivo() {
  * @param {string} password - Contraseña proporcionada por el usuario.
  * @returns {Object|null} El objeto de usuario encontrado y logueado, o null si falla.
  */
-
 async function loguearUsuario(email, password) {
-  const query = `
+  const mutation = `
     mutation Login($email: String!, $password: String!) {
       login(email: $email, password: $password) {
         token
         usuario {
           nombre
           email
-          rol
+          role
         }
       }
     }
   `;
 
-  try {
-    const result = await fetchGraphQL(query, { email, password });
-
-    if (result.errors) {
-      return null;
-    }
-
-    const { token, usuario } = result.data.login;
-
-    // Guardar token y usuario
-    localStorage.setItem("token", token);
-    localStorage.setItem(CLAVE_USUARIO_ACTIVO, usuario.nombre);
-    localStorage.setItem("rol", usuario.rol);
-
-    return usuario;
-  } catch (error) {
-    console.error("Error en login:", error);
-    return null;
-  }
+  const data = await graphqlRequest(mutation, { email, password });
+  return data.login;
 }
-
-// document.addEventListener('DOMContentLoaded', function () {
-//   inicializarUsuariosSiVacio();
-// });

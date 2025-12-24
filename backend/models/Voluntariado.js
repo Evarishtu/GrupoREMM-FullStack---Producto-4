@@ -9,7 +9,12 @@ const voluntariadoSchema = new mongoose.Schema(
         },
         usuario: {
             type: String,
-            required: true 
+            required: true,
+            trim: true
+        },
+        fecha: {
+            type: String,
+            required: true
         },
         descripcion: {
             type: String,

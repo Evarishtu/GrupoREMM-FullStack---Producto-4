@@ -50,24 +50,64 @@ async function manejarLogin() {
     alerta.classList.remove('d-none');
     return;
   }
-  
-  // loguearUsuario() es la función de almacenaje.js que busca, valida la pass, y guarda la sesión.
-  const usuarioLogueado = await loguearUsuario(email, password);
 
-  if (!usuarioLogueado) {
-    alerta.innerHTML = '<ul><li>Usuario o contraseña incorrectos.</li></ul>';
+  try {
+    const query = `
+      mutation Login($email: String!, $password: String!) {
+        login(email: $email, password: $password) {
+          token
+          usuario {
+            nombre
+            email
+            role
+          }
+        }
+      }
+    `;
+
+    const response = await fetch('https://localhost:4000/graphql', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        query,
+        variables: { email, password }
+      })
+    });
+
+    const result = await response.json();
+
+    if (result.errors) {
+      throw new Error(result.errors[0].message);
+    }
+
+    const { token, usuario } = result.data.login;
+
+    // Guardar token y usuario
+    localStorage.setItem('jwt', token);
+    localStorage.setItem('usuarioActivo', usuario.nombre); // Mantener compatibilidad con almacenaje.js
+    localStorage.setItem('usuarioEmail', usuario.email);
+    localStorage.setItem('usuarioRol', usuario.role);
+
+    // Exito
+    mostrarUsuarioActivo();
+
+    alerta.classList.remove('d-none');
+    alerta.classList.remove('alert-danger');
+    alerta.classList.add('alert-success');
+    alerta.innerHTML = `¡Sesión iniciada correctamente!<br>Bienvenid@, ${usuario.nombre}.`;
+
+    // Redirigir al dashboard después de 1 segundo
+    setTimeout(() => {
+      window.location.href = '../../index.html';
+    }, 1000);
+
+  } catch (error) {
+    alerta.innerHTML = `<ul><li>${error.message}</li></ul>`;
     alerta.classList.remove('d-none');
     passwordInput.value = '';
-    return;
   }
-
-  // Exito
-  mostrarUsuarioActivo();
-
-  alerta.classList.remove('d-none');
-  alerta.classList.remove('alert-danger');
-  alerta.classList.add('alert-success');
-  alerta.innerHTML = `¡Sesión iniciada correctamente!<br>Bienvenid@, ${usuarioLogueado.nombre}.`;
 }
 
 document.addEventListener('DOMContentLoaded', function () {

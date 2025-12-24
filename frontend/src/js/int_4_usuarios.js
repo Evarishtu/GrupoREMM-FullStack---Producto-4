@@ -1,7 +1,7 @@
 /**
- * Añade un nuevo usuario a localStorage después de validar los campos (nombre, email, password) y verificar unicidad del email.
+ * Añade un nuevo usuario en el backend después de validar los campos.
  */
-function addUsuario() {
+async function addUsuario() {
   const nombreInput = document.getElementById('nombre');
   const emailInput = document.getElementById('email');
   const passwordInput = document.getElementById('password');
@@ -31,7 +31,8 @@ function addUsuario() {
     errores.push('<li>La contraseña debe ser alfanumérica y tener exactamente 8 caracteres.</li>');
   }
 
-  if (existeEmailUsuario(email)) {
+  const existeEmail = await existeEmailUsuario(email);
+  if (existeEmail) {
     errores.push('<li>Ya existe un usuario con ese email.</li>');
   }
 
@@ -48,48 +49,109 @@ function addUsuario() {
     password
   };
 
-  crearUsuario(nuevoUsuario);
-
-  mostrarDatosUsuarios();
-
-  document.getElementById('altaUsuario').reset();
+  try {
+    setUsuariosLoading(true);
+    await crearUsuario(nuevoUsuario);
+    await mostrarDatosUsuarios();
+    document.getElementById('altaUsuario').reset();
+  } catch (error) {
+    alerta.innerHTML = `<ul><li>${error.message}</li></ul>`;
+    alerta.classList.add('error-con-icono');
+    alerta.classList.remove('d-none');
+  } finally {
+    setUsuariosLoading(false);
+  }
 }
 
 /**
  * Elimina un usuario de localStorage usando su índice y actualiza la tabla de la vista.
  * @param {number} indice - El índice del usuario a eliminar.
  */
-function eliminarUsuario(indice) {
-  borrarUsuarioPorIndice(indice);
-  mostrarDatosUsuarios();
-  actualizarUsuarioActivo();
+async function eliminarUsuario(indice) {
+  const alerta = document.getElementById('alertaErrores');
+  alerta.classList.add('d-none');
+  alerta.classList.remove('error-con-icono');
+  alerta.innerHTML = '';
+
+  try {
+    setUsuariosLoading(true);
+    await borrarUsuarioPorIndice(indice);
+    await mostrarDatosUsuarios();
+    actualizarUsuarioActivo();
+  } catch (error) {
+    alerta.innerHTML = `<ul><li>${error.message}</li></ul>`;
+    alerta.classList.add('error-con-icono');
+    alerta.classList.remove('d-none');
+  } finally {
+    setUsuariosLoading(false);
+  }
 }
 
 /**
  * Renderiza la lista de usuarios en la tabla de Consulta de Usuarios (usuarios.html).
  */
-function mostrarDatosUsuarios() {
+async function mostrarDatosUsuarios() {
   const cuerpo = document.querySelector('#consulta');
-  const listaUsuarios = obtenerUsuarios();
+  const alerta = document.getElementById('alertaErrores');
+  setUsuariosLoading(true);
+  alerta.classList.add('d-none');
+  alerta.classList.remove('error-con-icono');
+  alerta.innerHTML = '';
 
   cuerpo.innerHTML = '';
-  let delay = 0;
+  cuerpo.innerHTML = `
+    <tr>
+      <td colspan="4" class="text-center text-muted">Cargando usuarios...</td>
+    </tr>
+  `;
 
-  listaUsuarios.forEach(function (u, i) {
-    const fila = `
-      <tr class="fade-in-right" style="--d:${delay}ms">
-        <td>${u.nombre}</td>
-        <td>${u.email}</td>
-        <td>${u.password}</td>
-        <td>
-          <button type="button" class="btn btn-primary bg-custom-blue w-100"
-                  onclick="eliminarUsuario(${i})">Borrar</button>
-        </td>
+  try {
+    const listaUsuarios = await obtenerUsuarios();
+    cuerpo.innerHTML = '';
+    let delay = 0;
+
+    listaUsuarios.forEach(function (u, i) {
+      const fila = `
+        <tr class="fade-in-right" style="--d:${delay}ms">
+          <td>${u.nombre}</td>
+          <td>${u.email}</td>
+          <td>********</td>
+          <td>
+            <button type="button" class="btn btn-primary bg-custom-blue w-100"
+                    onclick="eliminarUsuario(${i})">Borrar</button>
+          </td>
+        </tr>
+      `;
+      cuerpo.innerHTML += fila;
+      delay += 100;
+    });
+
+    if (listaUsuarios.length === 0) {
+      cuerpo.innerHTML = `
+        <tr>
+          <td colspan="4" class="text-center text-muted">No hay usuarios disponibles.</td>
+        </tr>
+      `;
+    }
+  } catch (error) {
+    cuerpo.innerHTML = `
+      <tr>
+        <td colspan="4" class="text-center text-danger">Error al cargar usuarios.</td>
       </tr>
     `;
-    cuerpo.innerHTML += fila;
-    delay += 100;
-  });
+    alerta.innerHTML = `<ul><li>${error.message}</li></ul>`;
+    alerta.classList.add('error-con-icono');
+    alerta.classList.remove('d-none');
+  } finally {
+    setUsuariosLoading(false);
+  }
+}
+
+function setUsuariosLoading(isLoading) {
+  const submitButton = document.querySelector('#altaUsuario input[type="submit"]');
+  if (submitButton) {
+    submitButton.disabled = isLoading;
+  }
 }
 
 /**

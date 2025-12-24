@@ -1,113 +1,233 @@
-const DB_NAME = "VoluntariadoDB";
-const DB_VERSION = 2;
-let db = null;
+(() => {
+// Configuration
+const GRAPHQL_ENDPOINT = 'https://localhost:4000/graphql';
+const SOCKET_IO_ENDPOINT = 'https://localhost:4000';
 
-/**
- * Abre la conexión con la base de datos IndexedDB.
- * Realiza la lógica de 'onupgradeneeded' (crear store 'voluntariados' y su índice 'titulo').
- * @returns {Promise<IDBDatabase>} Una promesa que resuelve con el objeto de base de datos.
- */
-function abrirBD() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+// State
+let currentUser = null;
+let socket = null;
 
-    request.onupgradeneeded = function (event) {
-      const database = event.target.result;
+// Images pool (since backend doesn't store images)
+const IMAGES = [
+  'https://www.hillspet.com/content/dam/cp-sites-aem/hills/hills-pet/legacy-articles/inset/beagle-with-tongue-out.jpg',
+  'https://image.petmd.com/files/inline-images/shiba-inu-black-and-tan-colors.jpg?VersionId=pLq84BEOjdMjXeDCUJJJLFPuIWYsVMUU',
+  'https://www.minino.com/wp-content/uploads/2025/01/nota-de-blog-31-enero.png.webp',
+  'https://15f8034cdff6595cbfa1-1dd67c28d3aade9d3442ee99310d18bd.ssl.cf3.rackcdn.com/uploaded_thumb_big/c1dc328c546f572dfe66453867eeffb8/cuidar_iguana_domestica_consejos_clinica_veterinaria_la_granja_aviles.png'
+];
 
-      if (database.objectStoreNames.contains("voluntariados")) {
-        database.deleteObjectStore("voluntariados");
-      }
-
-      const store = database.createObjectStore("voluntariados", {
-        keyPath: "id",
-        autoIncrement: true
-      });
-
-      store.createIndex("titulo", "titulo", { unique: false });
-    };
-
-    request.onsuccess = function (event) {
-      db = event.target.result;
-      resolve(db);
-    };
-
-    request.onerror = function (event) {
-      console.error("Error al abrir IndexedDB:", event);
-      reject(event);
-    };
-  });
+function getImageForVolunteering(v) {
+    let hash = 0;
+    const str = v.id || v.titulo;
+    for (let i = 0; i < str.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const index = Math.abs(hash) % IMAGES.length;
+    return IMAGES[index];
 }
 
-/**
- * Comprueba si la tienda de 'voluntariados' tiene datos.
- * @returns {Promise<boolean>} True si hay datos, False si está vacía o hay un error.
- */
-function voluntariadosExisten() {
-  return new Promise((resolve) => {
-    const tx = db.transaction("voluntariados", "readonly");
-    const store = tx.objectStore("voluntariados");
+// GraphQL Helper
+async function graphqlRequest(query, variables = {}) {
+  const token = localStorage.getItem('jwt');
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
 
-    const countReq = store.count();
-
-    countReq.onsuccess = () => resolve(countReq.result > 0);
-    countReq.onerror = () => resolve(false);
+  const response = await fetch(GRAPHQL_ENDPOINT, {
+    method: 'POST',
+    headers,
+    credentials: 'include',
+    body: JSON.stringify({ query, variables })
   });
+
+  const result = await response.json();
+  if (result.errors) {
+    throw new Error(result.errors.map(e => e.message).join('\n'));
+  }
+  return result.data;
 }
 
-/**
- * Inserta los datos iniciales de 'window.voluntariados' en IndexedDB.
- * @returns {Promise<boolean>} Una promesa que resuelve a True al completarse la transacción.
- */
-function guardarVoluntariadosIniciales() {
-  return new Promise((resolve) => {
-    const tx = db.transaction("voluntariados", "readwrite");
-    const store = tx.objectStore("voluntariados");
+// Queries & Mutations
+const GET_USER_BY_EMAIL = `
+  query UsuarioPorEmail($email: String!) {
+    usuarioPorEmail(email: $email) {
+      id
+      nombre
+      email
+      role
+    }
+  }
+`;
 
-    window.voluntariados.forEach(v => store.add(v));
+const GET_VOLUNTEERINGS = `
+  query Voluntariados {
+    voluntariados {
+      id
+      titulo
+      usuario
+      fecha
+      descripcion
+      tipo
+    }
+  }
+`;
 
-    tx.oncomplete = () => resolve(true);
-  });
-}
+const CREATE_VOLUNTEERING = `
+  mutation CrearVoluntariado($titulo: String!, $usuario: String!, $fecha: String!, $descripcion: String!, $tipo: TipoVoluntariado!) {
+    crearVoluntariado(titulo: $titulo, usuario: $usuario, fecha: $fecha, descripcion: $descripcion, tipo: $tipo) {
+      id
+      titulo
+      usuario
+      fecha
+      descripcion
+      tipo
+    }
+  }
+`;
 
-/**
- * Obtiene todos los registros de voluntariados desde IndexedDB.
- * @returns {Promise<Array<Object>>} Una promesa que resuelve con la lista de voluntariados.
- */
-function obtenerVoluntariados() {
-  return new Promise((resolve) => {
-    const tx = db.transaction("voluntariados", "readonly");
-    const store = tx.objectStore("voluntariados");
+// Main Initialization
+document.addEventListener('DOMContentLoaded', async () => {
+  const token = localStorage.getItem('jwt');
+  if (!token) {
+    window.location.href = './src/pages/login.html';
+    return;
+  }
 
-    const req = store.getAll();
+  try {
+    // 1. Get User Info
+    const email = localStorage.getItem('usuarioEmail');
+    if (!email) {
+        window.location.href = './src/pages/login.html';
+        return;
+    }
 
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => resolve([]);
-  });
-}
+    const userData = await graphqlRequest(GET_USER_BY_EMAIL, { email });
+    currentUser = userData.usuarioPorEmail;
 
-/**
- * Muestra el nombre del usuario activo en el campo del dashboard (por ID).
- */
-function mostrarUsuarioActivoDashboard() {
-  const nombre = obtenerUsuarioActivo();
-  const campo = document.getElementById("usuario-logueado");
+    // Update UI with user name
+    const userField = document.getElementById("usuario-logueado");
+    if (userField) userField.textContent = currentUser.nombre;
 
-  if (campo) {
-    campo.textContent = nombre || "-no login-";
+    // 2. Load Volunteerings
+    await loadVolunteerings();
+
+    // 3. Setup Socket.io
+    setupSocket();
+
+    // 4. Setup Create Form
+    setupCreateForm();
+
+  } catch (error) {
+    console.error("Error initializing dashboard:", error);
+    if (error.message.includes("jwt") || error.message.includes("auth") || error.message.includes("permisos")) {
+         alert("Sesión expirada o inválida. Por favor inicie sesión nuevamente.");
+         window.location.href = './src/pages/login.html';
+    } else {
+        alert("Error loading dashboard: " + error.message);
+    }
+  }
+});
+
+async function loadVolunteerings() {
+  try {
+    const data = await graphqlRequest(GET_VOLUNTEERINGS);
+    let list = data.voluntariados;
+
+    // Filter based on role
+    if (currentUser.role !== 'ADMIN') {
+      list = list.filter(v => v.usuario === currentUser.email);
+    }
+
+    // Map to UI format (add images)
+    const uiList = list.map(v => ({
+        ...v,
+        imagenFondo: getImageForVolunteering(v),
+        tipo: v.tipo.toLowerCase() // Backend is UPPERCASE, UI expects lowercase for CSS classes
+    }));
+
+    mostrarDashboard(uiList);
+    setupDropZones();
+    loadLayout();
+
+  } catch (e) {
+    console.error(e);
+    alert("Error loading volunteerings");
   }
 }
 
-/**
- * Renderiza la lista de tarjetas de voluntariado en el dashboard.
- * Llama a addFlipCardListener después de la renderización.
- * @param {Array<Object>} voluntariadosList - Lista de voluntariados a mostrar.
- */
+function setupSocket() {
+  if (typeof io === 'undefined') {
+      console.error("Socket.io library not loaded");
+      return;
+  }
+  
+  const token = localStorage.getItem('jwt');
+  socket = io(SOCKET_IO_ENDPOINT, {
+    auth: {
+      token
+    }
+  });
+  
+  socket.on('connect', () => {
+    console.log('Connected to Socket.io');
+  });
+
+  socket.on('voluntariado_creado', () => loadVolunteerings());
+  socket.on('voluntariado_actualizado', () => loadVolunteerings());
+  socket.on('voluntariado_eliminado', () => loadVolunteerings());
+  socket.on('voluntariado_seleccionado', () => loadVolunteerings());
+}
+
+function setupCreateForm() {
+    const form = document.getElementById('createForm');
+    if (!form) return;
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const titulo = document.getElementById('titulo').value;
+        const descripcion = document.getElementById('descripcion').value;
+        const fecha = document.getElementById('fecha').value;
+        const tipo = document.getElementById('tipo').value; // OFERTA or PETICION
+
+        try {
+            await graphqlRequest(CREATE_VOLUNTEERING, {
+                titulo,
+                usuario: currentUser.email,
+                fecha,
+                descripcion,
+                tipo
+            });
+
+            // Close modal
+            const modalEl = document.getElementById('createModal');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            modal.hide();
+            
+            // Reset form
+            form.reset();
+
+            // Refresh list (Socket.io will also trigger this, but good to be sure)
+            await loadVolunteerings();
+
+        } catch (error) {
+            alert("Error creating volunteering: " + error.message);
+        }
+    });
+}
+
+// ==========================================
+// UI Logic (Adapted from original)
+// ==========================================
+
 function mostrarDashboard(voluntariadosList) {
   const data_ofertas = document.querySelector('#ofertas');
   data_ofertas.innerHTML = '';
 
   voluntariadosList.forEach((item) => {
-    if (!item.id) return; // Ignora elementos sin ID válido
+    if (!item.id) return;
     const typeClass = item.tipo === 'peticion' ? 'bg-dark-type text-white' : 'bg-light-type';
     const textClass = 'text-white';
 
@@ -140,23 +260,14 @@ function mostrarDashboard(voluntariadosList) {
     data_ofertas.innerHTML += fila;
   });
 
-  addFlipCardListener();
+  // Note: addFlipCardListener was called in original but not defined in the file I read.
+  // It might be in listener.js or utils.js. I should check if I need to call it.
+  // The original file called it.
+  if (typeof addFlipCardListener === 'function') {
+      addFlipCardListener();
+  }
 }
 
-/**
- * Inicializa el Dashboard: Muestra los voluntariados, configura las zonas de arrastre
- * y carga el layout guardado.
- * @param {Array<Object>} voluntariadosList - La lista de voluntariados recuperada.
- */
-function initDashboard(voluntariadosList) {
-  mostrarDashboard(voluntariadosList);
-  setupDropZones();
-  loadLayout();
-}
-
-/**
- * Configura los event listeners para las zonas de soltado (drop zones).
- */
 function setupDropZones() {
   document.querySelectorAll('.drop-zone').forEach(zone => {
     zone.addEventListener('dragover', dragoverHandler);
@@ -164,26 +275,14 @@ function setupDropZones() {
   });
 }
 
-/**
- * Manejador del evento dragstart. Guarda el ID del elemento que se está arrastrando.
- * @param {DragEvent} ev - Objeto evento de arrastre.
- */
 function dragstartHandler(ev) {
   ev.dataTransfer.setData("text/plain", ev.currentTarget.id);
 }
 
-/**
- * Manejador del evento dragover. Permite que el elemento sea soltado en la zona.
- * @param {DragEvent} ev - Objeto evento de arrastre.
- */
 function dragoverHandler(ev) {
   ev.preventDefault();
 }
 
-/**
- * Manejador del evento drop. Mueve el elemento arrastrado a la nueva zona y guarda el layout.
- * @param {DragEvent} ev - Objeto evento de arrastre.
- */
 function dropHandler(ev) {
   ev.preventDefault();
   const data = ev.dataTransfer.getData("text/plain");
@@ -197,9 +296,6 @@ function dropHandler(ev) {
   saveLayout();
 }
 
-/**
- * Guarda la disposición actual de las tarjetas en las zonas de soltado en localStorage.
- */
 function saveLayout() {
   const boxes = document.querySelectorAll('.drop-zone[id]')
   const layout = {};
@@ -215,9 +311,6 @@ function saveLayout() {
   localStorage.setItem("layout", JSON.stringify(layout));
 }
 
-/**
- * Carga la disposición de las tarjetas desde localStorage y las reubica en el DOM.
- */
 function loadLayout() {
     const raw = localStorage.getItem("layout");
     if (!raw) return;
@@ -229,50 +322,29 @@ function loadLayout() {
         return;
     }
     
-    // Indicador para saber si el layout de localStorage contiene referencias obsoletas
     let layoutCambiado = false; 
 
     Object.keys(layout).forEach(boxId => {
         const box = document.getElementById(boxId);
         if (!box) return;
 
-        // Filtrar solo los IDs que existen realmente en el DOM (renderizados desde la DB)
         const idsExistentes = layout[boxId].filter(itemId => {
             const item = document.getElementById(itemId);
             if (item) {
                 box.appendChild(item);
-                return true; // Conservar el ID
+                return true;
             }
-            layoutCambiado = true; // El elemento no existe, el layout está obsoleto
-            return false; // Descartar el ID
+            layoutCambiado = true;
+            return false;
         });
 
-        // Si se tuvo que filtrar algún ID, actualizamos el layout para el guardado.
         if (layoutCambiado) {
              layout[boxId] = idsExistentes;
         }
     });
 
-    // Si se encontró algún elemento eliminado, guardamos el layout limpio.
     if (layoutCambiado) {
-        // Guardamos solo si fue necesario limpiar referencias
         localStorage.setItem("layout", JSON.stringify(layout));
     }
 }
-
-document.addEventListener('DOMContentLoaded', async function () {
-
-  mostrarUsuarioActivoDashboard();
-
-  await abrirBD();
-
-  const existen = await voluntariadosExisten();
-
-  if (!existen) {
-    await guardarVoluntariadosIniciales();
-  }
-
-  const lista = await obtenerVoluntariados();
-
-  initDashboard(lista);
-});
+})();
