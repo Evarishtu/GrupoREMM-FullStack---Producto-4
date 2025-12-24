@@ -17,3 +17,7 @@ function esPasswordValido(password) {
     const regex = /^[a-zA-Z0-9]{8}$/; 
     return regex.test(password);
 }
+
+function esAdmin() {
+  return localStorage.getItem("rol") === "ADMIN";
+}

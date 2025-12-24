@@ -1,5 +1,25 @@
-const CLAVE_USUARIOS = 'usuarios';
+// const CLAVE_USUARIOS = 'usuarios';
 const CLAVE_USUARIO_ACTIVO = 'usuarioActivo';
+
+/** Definición del helpler común para GraphQL */
+
+const GRAPHQL_URL = "http://localhost:3000/graphql";
+
+function fetchGraphQL(query, variables = {}) {
+  const token = localStorage.getItem("token");
+
+  return fetch(GRAPHQL_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { "Authorization": "Bearer " + token } : {})
+    },
+    body: JSON.stringify({
+      query,
+      variables
+    })
+  }).then(res => res.json());
+}
 
 /**
  * Inicializa los usuarios en localStorage SOLO si:
@@ -159,33 +179,42 @@ function limpiarUsuarioActivo() {
  * @param {string} password - Contraseña proporcionada por el usuario.
  * @returns {Object|null} El objeto de usuario encontrado y logueado, o null si falla.
  */
-function loguearUsuario(email, password) {
-    const listaUsuarios = obtenerUsuarios();
-    let encontrado = null;
 
-    // Buscar al usuario por email
-    for (let i = 0; i < listaUsuarios.length; i++) {
-        if (listaUsuarios[i].email === email) {
-            encontrado = listaUsuarios[i];
-            break;
+async function loguearUsuario(email, password) {
+  const query = `
+    mutation Login($email: String!, $password: String!) {
+      login(email: $email, password: $password) {
+        token
+        usuario {
+          nombre
+          email
+          rol
         }
+      }
+    }
+  `;
+
+  try {
+    const result = await fetchGraphQL(query, { email, password });
+
+    if (result.errors) {
+      return null;
     }
 
-    if (!encontrado) {
-        return null; // El usuario no existe
-    }
+    const { token, usuario } = result.data.login;
 
-    // Verificar la contraseña
-    if (encontrado.password !== password) {
-        return null; // Contraseña incorrecta
-    }
+    // Guardar token y usuario
+    localStorage.setItem("token", token);
+    localStorage.setItem(CLAVE_USUARIO_ACTIVO, usuario.nombre);
+    localStorage.setItem("rol", usuario.rol);
 
-    // Si es exitoso, guardar el nombre del usuario activo
-    guardarUsuarioActivo(encontrado.nombre); 
-
-    return encontrado; // Retorna el objeto de usuario
+    return usuario;
+  } catch (error) {
+    console.error("Error en login:", error);
+    return null;
+  }
 }
 
-document.addEventListener('DOMContentLoaded', function () {
-  inicializarUsuariosSiVacio();
-});
+// document.addEventListener('DOMContentLoaded', function () {
+//   inicializarUsuariosSiVacio();
+// });

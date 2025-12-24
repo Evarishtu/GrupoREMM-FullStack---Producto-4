@@ -23,6 +23,8 @@ import {
 
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import User from "../models/User.js";
+import {requireAuth, requireRole} from "./auth.js"
 
 /**
  * Contexto de GraphQL con el usuario autenticado mediante JWT.
@@ -35,11 +37,7 @@ import jwt from "jsonwebtoken";
  * @param {GraphQLContext} context - Contexto de GraphQL con el usuario autenticado.
  * @throws {Error} Si no existe usuario en el contexto.
  */
-function requireAuth(context) {
-  if (!context?.user) {
-    throw new Error("No autorizado");
-  }
-}
+
 
 /**
  * Objeto principal que contiene todos los resolvers para Queries y Mutations de GraphQL.
@@ -56,7 +54,8 @@ export const root = {
    * @async
    * @returns {Promise<Array<{nombre: string, email: string}>>}
    */
-  usuarios: async () => {
+  usuarios: async (_, context) => {
+    requireRole(context, "ADMIN");
     return getAllUsuarios();
   },
 
@@ -66,7 +65,8 @@ export const root = {
    * @param {{email: string}} args
    * @returns {Promise<{nombre: string, email: string} | null>}
    */
-  usuarioPorEmail: async ({ email }) => {
+  usuarioPorEmail: async ({ email }, context) => {
+    requireRole(context, "ADMIN");
     return getUsuarioByEmail(email);
   },
 
@@ -75,8 +75,18 @@ export const root = {
    * @async
    * @returns {Promise<Array<{id: string, titulo: string, usuario: string, fecha: string, descripcion: string, tipo: string}>>}
    */
-  voluntariados: async () => {
-    return getAllVoluntariados();
+  voluntariados: async (_, context) => {
+    requireAuth(context);
+
+    // ADMIN tiene acceso a todos los voluntariados
+    if (context.user.rol === "ADMIN") {
+      return getAllVoluntariados();
+    }
+
+    // USER solo tiene acceso a sus voluntariados
+    return getAllVoluntariados().filter(
+      v => v.usuario === context.user.email
+    );
   },
 
   /**
@@ -85,7 +95,8 @@ export const root = {
    * @param {{id: string}} args
    * @returns {Promise<{id: string, titulo: string, usuario: string, fecha: string, descripcion: string, tipo: string} | null>}
    */
-  voluntariadoPorId: async ({ id }) => {
+  voluntariadoPorId: async ({ id }, context) => {
+    require(context);
     return getVoluntariadoById(id);
   },
 
@@ -99,9 +110,30 @@ export const root = {
    * @param {{nombre: string, email: string, password: string}} args
    * @returns {Promise<{id: string, nombre: string, email: string}>}
    */
-  crearUsuario: async ({ nombre, email, password }) => {
-    return createUsuario({ nombre, email, password });
-  },
+ crearUsuario: async ({ nombre, email, password }) => {
+  const existente = await User.findOne({ email });
+  if (existente) {
+    throw new Error("Ya existe un usuario con ese email");
+  }
+
+  const hashed = await bcrypt.hash(password, 10);
+
+  const user = new User({
+    nombre,
+    email,
+    password: hashed
+    // rol se asigna automáticamente como "USER"
+  });
+
+  const saved = await user.save();
+
+  return {
+    id: saved._id.toString(),
+    nombre: saved.nombre,
+    email: saved.email,
+    rol: saved.rol
+  };
+},
 
   /**
    * Elimina un usuario por su dirección de correo electrónico.
@@ -111,7 +143,7 @@ export const root = {
    * @returns {Promise<string>}
    */
   borrarUsuarioPorEmail: async ({ email }, context) => {
-    requireAuth(context);
+    requireRole(context, "ADMIN");
     await deleteUsuarioByEmail(email);
     return "Usuario eliminado";
   },
@@ -124,7 +156,7 @@ export const root = {
    * @returns {Promise<string>}
    */
   borrarUsuarioPorIndice: async ({ indice }, context) => {
-    requireAuth(context);
+    requireRole(context, "ADMIN");
     const ok = await deleteUsuarioByIndex(indice);
     if (!ok) {
       throw new Error("Índice fuera de rango");
@@ -138,35 +170,36 @@ export const root = {
    * @param {{email: string, password: string}} args
    * @returns {Promise<{token: string, usuario: {nombre: string, email: string}}>}
    */
-  login: async ({ email, password }) => {
-    const user = await getUsuarioByEmail(email);
-    if (!user) {
-      throw new Error("Credenciales inválidas");
+login: async ({ email, password }) => {
+  const user = await User.findOne({ email });
+  if (!user) {
+    throw new Error("Credenciales inválidas");
+  }
+
+  const ok = await bcrypt.compare(password, user.password);
+  if (!ok) {
+    throw new Error("Credenciales inválidas");
+  }
+
+  const token = jwt.sign(
+    {
+      id: user._id,
+      email: user.email,
+      rol: user.rol
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: "1h" }
+  );
+
+  return {
+    token,
+    usuario: {
+      nombre: user.nombre,
+      email: user.email,
+      rol: user.rol
     }
-
-    const ok = await bcrypt.compare(password, user.password);
-    if (!ok) {
-      throw new Error("Credenciales inválidas");
-    }
-
-    if (!process.env.JWT_SECRET) {
-      throw new Error("JWT_SECRET no está definida en las variables de entorno");
-    }
-
-    const token = jwt.sign(
-      { email: user.email, nombre: user.nombre, rol: "ADMIN" },
-      process.env.JWT_SECRET,
-      { expiresIn: "1h" }
-    );
-
-    return {
-      token,
-      usuario: {
-        nombre: user.nombre,
-        email: user.email
-      }
-    };
-  },
+  };
+},
 
   /**
    * Crea un nuevo voluntariado validando el tipo.
@@ -250,7 +283,7 @@ export const root = {
    * @returns {Promise<string>}
    */
   eliminarVoluntariado: async ({ id }, context) => {
-    requireAuth(context);
+    requireAuth(context, "ADMIN");
 
     const ok = await deleteVoluntariado(id);
     if (!ok) {
@@ -268,7 +301,7 @@ export const root = {
    * @returns {Promise<string>}
    */
   eliminarVoluntariadoPorIndice: async ({ indice }, context) => {
-    requireAuth(context);
+    requireRole(context, "ADMIN");
 
     const ok = await deleteVoluntariadoByIndex(indice);
     if (!ok) {
