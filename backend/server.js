@@ -26,7 +26,6 @@ import { schema } from "./graphql/schema.js";
 import { root } from "./graphql/resolvers.js";
 import { connectMongo } from "./database/mongoose.js";
 
-
 /** @typedef {Object} Express */
 
 /**
@@ -37,21 +36,21 @@ const app = express();
 const keyPath = path.join(process.cwd(), "certs", "dev.key");
 const certPath = path.join(process.cwd(), "certs", "dev.crt");
 
-const httpServer = createServer({
-  key: fs.readFileSync(keyPath),
-  cert: fs.readFileSync(certPath)
-}, app);
-const allowedOrigins = [
-  "http://localhost:5500",
-  "https://localhost:5500"
-];
+const httpServer = createServer(
+  {
+    key: fs.readFileSync(keyPath),
+    cert: fs.readFileSync(certPath),
+  },
+  app
+);
+const allowedOrigins = ["http://localhost:5500", "https://localhost:5500"];
 
 const io = new Server(httpServer, {
   cors: {
     origin: allowedOrigins,
     methods: ["GET", "POST"],
-    credentials: true
-  }
+    credentials: true,
+  },
 });
 
 io.use((socket, next) => {
@@ -63,7 +62,7 @@ io.use((socket, next) => {
     const user = jwt.verify(token, process.env.JWT_SECRET);
     socket.user = {
       ...user,
-      role: user.role ?? user.rol ?? "USER"
+      role: user.role ?? user.rol ?? "USER",
     };
     return next();
   } catch (error) {
@@ -85,7 +84,7 @@ io.on("connection", (socket) => {
  * Usa la variable de entorno PORT o 3000 por defecto.
  * @type {number|string}
  */
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 4000;
 
 /**
  * Middleware para parsear cuerpos JSON en las peticiones entrantes.
@@ -95,10 +94,12 @@ app.use(bodyParser.json());
 /**
  * Middleware CORS que permite peticiones desde cualquier origen.
  */
-app.use(cors({
-  origin: allowedOrigins,
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  })
+);
 
 /**
  * Middleware de sesión para mantener estado de usuario en servidor.
@@ -110,8 +111,8 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      sameSite: "lax"
-    }
+      sameSite: "lax",
+    },
   })
 );
 
@@ -164,7 +165,7 @@ app.use(
     schema,
     rootValue: root,
     graphiql: true,
-    context: { user: req.user, io, req }
+    context: { user: req.user, io, req },
   }))
 );
 
