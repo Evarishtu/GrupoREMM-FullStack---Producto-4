@@ -5,7 +5,7 @@ export function requireAuth(context) {
 }
 
 export function requireRole(context, role) {
-  if (!context.user || context.user.rol !== role) {
+  if (!context.user || context.user.role !== role) {
     throw new Error("No autorizado");
   }
 }

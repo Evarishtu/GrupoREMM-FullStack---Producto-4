@@ -1,23 +1,103 @@
+var GRAPHQL_ENDPOINT = window.GRAPHQL_ENDPOINT || 'https://localhost:4000/graphql';
+window.GRAPHQL_ENDPOINT = GRAPHQL_ENDPOINT;
 const CLAVE_USUARIO_ACTIVO = 'usuarioActivo';
 
-/** Definición del helpler común para GraphQL */
+async function graphqlRequest(query, variables = {}) {
+  const token = localStorage.getItem('jwt');
+  const headers = {
+    'Content-Type': 'application/json'
+  };
 
-const GRAPHQL_URL = "http://localhost:3000/graphql";
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
 
-function fetchGraphQL(query, variables = {}) {
-  const token = localStorage.getItem("token");
+  const response = await fetch(GRAPHQL_ENDPOINT, {
+    method: 'POST',
+    headers,
+    credentials: 'include',
+    body: JSON.stringify({ query, variables })
+  });
 
-  return fetch(GRAPHQL_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { "Authorization": "Bearer " + token } : {})
-    },
-    body: JSON.stringify({
-      query,
-      variables
-    })
-  }).then(res => res.json());
+  const result = await response.json();
+  if (result.errors) {
+    throw new Error(result.errors.map((e) => e.message).join('\n'));
+  }
+  return result.data;
+}
+
+/**
+ * Obtiene la lista completa de usuarios desde el backend.
+ * @returns {Promise<Array<Object>>} Lista de usuarios.
+ */
+async function obtenerUsuarios() {
+  const query = `
+    query Usuarios {
+      usuarios {
+        id
+        nombre
+        email
+        role
+      }
+    }
+  `;
+  const data = await graphqlRequest(query);
+  return data.usuarios || [];
+}
+
+/**
+ * Crea un nuevo usuario en el backend.
+ * @param {Object} usuario - El objeto del nuevo usuario ({nombre, email, password}).
+ */
+async function crearUsuario(usuario) {
+  const mutation = `
+    mutation CrearUsuario($nombre: String!, $email: String!, $password: String!) {
+      crearUsuario(nombre: $nombre, email: $email, password: $password) {
+        id
+        nombre
+        email
+        role
+      }
+    }
+  `;
+  const data = await graphqlRequest(mutation, usuario);
+  return data.crearUsuario;
+}
+
+/**
+ * Borra un usuario usando su índice en el listado del backend.
+ * @param {number} indice - El índice del usuario a borrar.
+ */
+async function borrarUsuarioPorIndice(indice) {
+  const mutation = `
+    mutation BorrarUsuarioPorIndice($indice: Int!) {
+      borrarUsuarioPorIndice(indice: $indice)
+    }
+  `;
+  await graphqlRequest(mutation, { indice });
+}
+
+/**
+ * Borra un usuario usando su dirección de email.
+ * @param {string} email - El email del usuario a borrar.
+ */
+async function borrarUsuarioPorEmail(email) {
+  const mutation = `
+    mutation BorrarUsuarioPorEmail($email: String!) {
+      borrarUsuarioPorEmail(email: $email)
+    }
+  `;
+  await graphqlRequest(mutation, { email });
+}
+
+/**
+ * Comprueba si ya existe un usuario con la dirección de email proporcionada.
+ * @param {string} email - El email a verificar.
+ * @returns {boolean} True si el email ya existe, False en caso contrario.
+ */
+async function existeEmailUsuario(email) {
+  const lista = await obtenerUsuarios();
+  return lista.some((u) => u.email === email);
 }
 
 /**
@@ -63,40 +143,20 @@ function limpiarUsuarioActivo() {
  * @param {string} password - Contraseña proporcionada por el usuario.
  * @returns {Object|null} El objeto de usuario encontrado y logueado, o null si falla.
  */
-
 async function loguearUsuario(email, password) {
-  const query = `
+  const mutation = `
     mutation Login($email: String!, $password: String!) {
       login(email: $email, password: $password) {
         token
         usuario {
           nombre
           email
-          rol
+          role
         }
       }
     }
   `;
 
-  try {
-    const result = await fetchGraphQL(query, { email, password });
-
-    if (result.errors) {
-      return null;
-    }
-
-    const { token, usuario } = result.data.login;
-
-    
-    localStorage.setItem("token", token);
-    localStorage.setItem(CLAVE_USUARIO_ACTIVO, usuario.nombre);
-    localStorage.setItem("rol", usuario.rol);
-    localStorage.setItem("email", usuario.email);
-
-    return usuario;
-  } catch (error) {
-    console.error("Error en login:", error);
-    return null;
-  }
+  const data = await graphqlRequest(mutation, { email, password });
+  return data.login;
 }
-

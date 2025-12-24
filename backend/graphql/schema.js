@@ -16,7 +16,7 @@ export const schema = buildSchema(`
         id: ID!
         nombre: String!
         email: String!
-        rol: String!
+        role: String!
     }
 
     """

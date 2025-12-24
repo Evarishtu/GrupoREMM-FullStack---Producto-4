@@ -17,7 +17,6 @@ function addMenu() {
       setActiveLink();
       mobileMenuAnimation();
       mostrarUsuarioActivoMenu();
-      aplicarPermisosMenu();
     })
     .catch(err => console.error("Error cargando el menú:", err));
 }
@@ -77,42 +76,5 @@ function mobileMenuAnimation() {
     navbar.classList.remove('show-fullscreen');
   });
 }
-
-function logout() {
-  localStorage.removeItem("token");
-  localStorage.removeItem("rol");
-  localStorage.removeItem("email");
-  localStorage.removeItem("usuarioActivo");
-
-  window.location.href = "/frontend/src/pages/login.html";
-}
-
-function aplicarPermisosMenu() {
-  const token = localStorage.getItem("token");
-  const rol = localStorage.getItem("rol");
-
-  // Enlaces del menú
-  const linkUsuarios = document.querySelector('[data-href="./src/pages/usuarios.html"]');
-  const linkVoluntariados = document.querySelector('[data-href="./src/pages/voluntariados.html"]');
-  const linkLogin = document.querySelector('[data-href="./src/pages/login.html"]');
-  const linkLogout = document.getElementById("logout-link"); // si existe
-
-  // No logueado
-  if (!token) {
-    // El registro es público
-    if (linkVoluntariados) linkVoluntariados.style.display = "none";
-    if (linkLogout) linkLogout.style.display = "none";
-    return;
-  }
-
-  // USER
-  if (rol === "USER") {
-    if (linkUsuarios) linkUsuarios.style.display = "none";
-  }
-
-  // ADMIN ve todo → no se oculta nada
-}
-
-window.logout = logout;
 
 window.addMenu = addMenu;

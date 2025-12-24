@@ -3,33 +3,29 @@
  * Contiene todos los resolvers (Queries y Mutations) para la API GraphQL del sistema de voluntariados.
  */
 
-import {
-  getAllUsuarios,
-  getUsuarioByEmail,
-  createUsuario,
-  deleteUsuarioByEmail,
-  deleteUsuarioByIndex
-} from "../models/usuario.model.js";
-
-import {
-  getAllVoluntariados,
-  getVoluntariadoById,
-  createVoluntariado,
-  updateVoluntariado,
-  deleteVoluntariado,
-  updateVoluntariadoByIndex,
-  deleteVoluntariadoByIndex
-} from "../models/voluntariado.model.js";
-
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import Voluntariado from "../models/Voluntariado.js";
 import {requireAuth, requireRole} from "./auth.js"
+
+function emitirEventoVoluntariado(io, evento, payload, usuarios = []) {
+  if (!io) {
+    return;
+  }
+
+  const rooms = new Set(["admins"]);
+  usuarios.filter(Boolean).forEach((email) => rooms.add(`user:${email}`));
+
+  rooms.forEach((room) => {
+    io.to(room).emit(evento, payload);
+  });
+}
 
 /**
  * Contexto de GraphQL con el usuario autenticado mediante JWT.
  * @typedef {Object} GraphQLContext
- * @property {{email: string, nombre: string, rol: string} | null} user - Usuario autenticado o null si no hay token válido.
+ * @property {{email: string, nombre: string, role: string} | null} user - Usuario autenticado o null si no hay token válido.
  */
 
 /**
@@ -56,7 +52,13 @@ export const root = {
    */
   usuarios: async (_, context) => {
     requireRole(context, "ADMIN");
-    return getAllUsuarios();
+    const usuarios = await User.find({}, {password: 0});
+    return usuarios.map((usuario) => ({
+      id: usuario._id.toString(),
+      nombre: usuario.nombre,
+      email: usuario.email,
+      role: usuario.role ?? usuario.rol ?? "USER"
+    }));
   },
 
   /**
@@ -66,8 +68,20 @@ export const root = {
    * @returns {Promise<{nombre: string, email: string} | null>}
    */
   usuarioPorEmail: async ({ email }, context) => {
-    requireRole(context, "ADMIN");
-    return getUsuarioByEmail(email);
+    requireAuth(context);
+    if (context.user.role !== "ADMIN" && context.user.email !== email) {
+      throw new Error("No tienes permisos para ver este usuario");
+    }
+    const usuario = await User.findOne({email}).select("-password");
+    if (!usuario) {
+      return null;
+    }
+    return {
+      id: usuario._id.toString(),
+      nombre: usuario.nombre,
+      email: usuario.email,
+      role: usuario.role ?? usuario.rol ?? "USER"
+    };
   },
 
   /**
@@ -77,16 +91,10 @@ export const root = {
    */
   voluntariados: async (_, context) => {
     requireAuth(context);
-
-    // ADMIN tiene acceso a todos los voluntariados
-    if (context.user.rol === "ADMIN") {
-      return getAllVoluntariados();
+    if (context.user.role === "ADMIN") {
+      return Voluntariado.find();
     }
-
-    // USER solo tiene acceso a sus voluntariados
-    return getAllVoluntariados().filter(
-      v => v.usuario === context.user.email
-    );
+    return Voluntariado.find({usuario: context.user.email});
   },
 
   /**
@@ -96,8 +104,21 @@ export const root = {
    * @returns {Promise<{id: string, titulo: string, usuario: string, fecha: string, descripcion: string, tipo: string} | null>}
    */
   voluntariadoPorId: async ({ id }, context) => {
-    require(context);
-    return getVoluntariadoById(id);
+    requireAuth(context);
+    const voluntariado = await Voluntariado.findById(id);
+    if (!voluntariado) {
+      return null;
+    }
+    if (context.user.role !== "ADMIN" && voluntariado.usuario !== context.user.email) {
+      throw new Error("No tienes permisos para ver este voluntariado");
+    }
+    emitirEventoVoluntariado(
+      context.io,
+      "voluntariado_seleccionado",
+      { id: voluntariado._id.toString() },
+      [voluntariado.usuario]
+    );
+    return voluntariado;
   },
 
   // ======================
@@ -110,30 +131,30 @@ export const root = {
    * @param {{nombre: string, email: string, password: string}} args
    * @returns {Promise<{id: string, nombre: string, email: string}>}
    */
- crearUsuario: async ({ nombre, email, password }) => {
-  const existente = await User.findOne({ email });
-  if (existente) {
-    throw new Error("Ya existe un usuario con ese email");
-  }
+  crearUsuario: async ({ nombre, email, password }) => {
+    if (!nombre || !email || !password) {
+      throw new Error("Faltan datos obligatorios para crear el usuario");
+    }
 
-  const hashed = await bcrypt.hash(password, 10);
+    const existente = await User.findOne({email});
+    if (existente) {
+      throw new Error("Ya existe un usuario con ese email");
+    }
 
-  const user = new User({
-    nombre,
-    email,
-    password: hashed
-    // rol se asigna automáticamente como "USER"
-  });
+    const hashed = await bcrypt.hash(password, 10);
+    const user = await User.create({
+      nombre,
+      email,
+      password: hashed
+    });
 
-  const saved = await user.save();
-
-  return {
-    id: saved._id.toString(),
-    nombre: saved.nombre,
-    email: saved.email,
-    rol: saved.rol
-  };
-},
+    return {
+      id: user._id.toString(),
+      nombre: user.nombre,
+      email: user.email,
+      role: user.role ?? "USER"
+    };
+  },
 
   /**
    * Elimina un usuario por su dirección de correo electrónico.
@@ -144,7 +165,7 @@ export const root = {
    */
   borrarUsuarioPorEmail: async ({ email }, context) => {
     requireRole(context, "ADMIN");
-    await deleteUsuarioByEmail(email);
+    await User.deleteOne({email});
     return "Usuario eliminado";
   },
 
@@ -157,10 +178,11 @@ export const root = {
    */
   borrarUsuarioPorIndice: async ({ indice }, context) => {
     requireRole(context, "ADMIN");
-    const ok = await deleteUsuarioByIndex(indice);
-    if (!ok) {
+    const usuarios = await User.find();
+    if (!Number.isInteger(indice) || indice < 0 || indice >= usuarios.length) {
       throw new Error("Índice fuera de rango");
     }
+    await User.deleteOne({_id: usuarios[indice]._id});
     return "Usuario eliminado por índice";
   },
 
@@ -170,10 +192,10 @@ export const root = {
    * @param {{email: string, password: string}} args
    * @returns {Promise<{token: string, usuario: {nombre: string, email: string}}>}
    */
-login: async ({ email, password }) => {
-  const user = await User.findOne({ email });
-  if (!user) {
-    throw new Error("Credenciales inválidas");
+login: async ({ email, password }, context) => {
+    const user = await User.findOne({ email });
+    if (!user) {
+      throw new Error("Credenciales inválidas");
   }
 
   const ok = await bcrypt.compare(password, user.password);
@@ -181,22 +203,33 @@ login: async ({ email, password }) => {
     throw new Error("Credenciales inválidas");
   }
 
+  const role = user.role ?? user.rol ?? "USER";
+
   const token = jwt.sign(
     {
       id: user._id,
       email: user.email,
-      rol: user.rol
+      role
     },
     process.env.JWT_SECRET,
     { expiresIn: "1h" }
   );
+
+  if (context?.req?.session) {
+    context.req.session.user = {
+      id: user._id.toString(),
+      nombre: user.nombre,
+      email: user.email,
+      role
+    };
+  }
 
   return {
     token,
     usuario: {
       nombre: user.nombre,
       email: user.email,
-      rol: user.rol
+      role
     }
   };
 },
@@ -216,13 +249,34 @@ login: async ({ email, password }) => {
       throw new Error("El tipo de voluntariado debe ser PETICION u OFERTA");
     }
 
-    return createVoluntariado({
+    const usuarioAsignado =
+      context.user.role === "ADMIN" && usuario ? usuario : context.user.email;
+
+    const voluntariado = await Voluntariado.create({
       titulo,
-      usuario,
+      usuario: usuarioAsignado,
       fecha,
       descripcion,
       tipo
     });
+
+    const nuevo = {
+      id: voluntariado._id.toString(),
+      titulo: voluntariado.titulo,
+      usuario: voluntariado.usuario,
+      fecha: voluntariado.fecha,
+      descripcion: voluntariado.descripcion,
+      tipo: voluntariado.tipo
+    };
+
+    emitirEventoVoluntariado(
+      context.io,
+      "voluntariado_creado",
+      nuevo,
+      [nuevo.usuario]
+    );
+
+    return nuevo;
   },
 
   /**
@@ -242,10 +296,29 @@ login: async ({ email, password }) => {
       }
     }
 
-    const actualizado = await updateVoluntariado(id, cambios);
+    const objetivo = await Voluntariado.findById(id);
+    if (!objetivo) {
+      throw new Error("Voluntariado no encontrado");
+    }
+    if (context.user.role !== "ADMIN" && objetivo.usuario !== context.user.email) {
+      throw new Error("No tienes permisos para actualizar este voluntariado");
+    }
+
+    const actualizado = await Voluntariado.findByIdAndUpdate(
+      id,
+      cambios,
+      {new: true, runValidators: true}
+    );
     if (!actualizado) {
       throw new Error("Voluntariado no encontrado");
     }
+
+    emitirEventoVoluntariado(
+      context.io,
+      "voluntariado_actualizado",
+      { id, ...cambios },
+      [objetivo.usuario, actualizado.usuario]
+    );
 
     return "Voluntariado actualizado";
   },
@@ -267,10 +340,21 @@ login: async ({ email, password }) => {
       }
     }
 
-    const ok = await updateVoluntariadoByIndex(indice, cambios);
-    if (!ok) {
+    if (context.user.role !== "ADMIN") {
+      throw new Error("No tienes permisos para actualizar por índice");
+    }
+
+    const voluntariados = await Voluntariado.find();
+
+    if (!Number.isInteger(indice) || indice < 0 || indice >= voluntariados.length) {
       throw new Error("Índice fuera de rango");
     }
+
+    await Voluntariado.findByIdAndUpdate(
+      voluntariados[indice]._id,
+      cambios,
+      {runValidators: true}
+    );
 
     return "Voluntariado actualizado por índice";
   },
@@ -283,12 +367,24 @@ login: async ({ email, password }) => {
    * @returns {Promise<string>}
    */
   eliminarVoluntariado: async ({ id }, context) => {
-    requireAuth(context, "ADMIN");
+    requireAuth(context);
 
-    const ok = await deleteVoluntariado(id);
-    if (!ok) {
+    const voluntariado = await Voluntariado.findById(id);
+    if (!voluntariado) {
       throw new Error("Voluntariado no encontrado");
     }
+    if (context.user.role !== "ADMIN" && voluntariado.usuario !== context.user.email) {
+      throw new Error("No tienes permisos para eliminar este voluntariado");
+    }
+
+    await Voluntariado.deleteOne({_id: id});
+
+    emitirEventoVoluntariado(
+      context.io,
+      "voluntariado_eliminado",
+      { id },
+      [voluntariado.usuario]
+    );
 
     return "Voluntariado eliminado";
   },
@@ -303,10 +399,13 @@ login: async ({ email, password }) => {
   eliminarVoluntariadoPorIndice: async ({ indice }, context) => {
     requireRole(context, "ADMIN");
 
-    const ok = await deleteVoluntariadoByIndex(indice);
-    if (!ok) {
+    const voluntariados = await Voluntariado.find();
+
+    if (!Number.isInteger(indice) || indice < 0 || indice >= voluntariados.length) {
       throw new Error("Índice fuera de rango");
     }
+
+    await Voluntariado.deleteOne({_id: voluntariados[indice]._id});
 
     return "Voluntariado eliminado por índice";
   }

@@ -6,7 +6,16 @@ import User from "./User.js";
 * @returns {Promise<Array>}   
 */
 export async function getAllUsuarios(){
-    return User.find({}, {password: 0});
+    const usuarios = await User.find({}, {password: 0});
+    return usuarios.map((usuario) => {
+        if (!usuario.role && usuario.rol) {
+            usuario.role = usuario.rol;
+        }
+        if (!usuario.role) {
+            usuario.role = "USER";
+        }
+        return usuario;
+    });
 }
 
 /**
@@ -14,7 +23,17 @@ export async function getAllUsuarios(){
  * @returns {Promise<Object|null>}
  */
 export async function getUsuarioByEmail(email){
-    return User.findOne({email});
+    const usuario = await User.findOne({email}).select("-password");
+    if (!usuario) {
+        return null;
+    }
+    if (!usuario.role && usuario.rol) {
+        usuario.role = usuario.rol;
+    }
+    if (!usuario.role) {
+        usuario.role = "USER";
+    }
+    return usuario;
 }
 /**
  * Crea un nuevo usuario
@@ -43,7 +62,8 @@ export async function createUsuario(data){
     return {
         id: user._id.toString(),
         nombre: user.nombre,
-        email: user.email
+        email: user.email,
+        role: user.role
     };
 }
 
@@ -53,7 +73,7 @@ export async function createUsuario(data){
  */
 export async function deleteUsuarioByEmail(email){
     const result = await User.deleteOne({email});
-    return result.deleteCount === 1;
+    return result.deletedCount === 1;
 }
 
 /**
