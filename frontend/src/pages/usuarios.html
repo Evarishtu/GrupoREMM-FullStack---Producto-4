@@ -42,6 +42,13 @@
                             <input type="password" class="form-control" id="password">
                             <div class="invalid-feedback">La contraseña es obligatoria.</div>
                         </div>
+                        <div class="mb-3">
+                            <label for="rol" class="form-label">Rol</label>
+                            <select id="rol" class="form-select">
+                                <option value="USER">Usuario normal</option>
+                                <option value="ADMIN">Administrador</option>
+                            </select>
+                        </div>
                         <div>
                         <input type="submit" value="Dar de alta" class="btn btn-primary bg-custom-blue w-100">
                     </fieldset>
@@ -79,7 +86,6 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {       
             addMenu();
-            mostrarDatosUsuarios();
         });
     </script>
     </body>
