@@ -8,6 +8,13 @@ export async function getAllVoluntariados(){
 }
 
 /**
+ * Obtiene voluntariados filtrando por usuario.
+ */
+export async function getVoluntariadosByUsuario(usuario){
+    return Voluntariado.find({usuario});
+}
+
+/**
  * Obtiene un voluntariado por ID.
  */
 export async function getVoluntariadoById(id){
@@ -44,7 +51,7 @@ export async function createVoluntariado(data){
  */
 
 export async function updateVoluntariado(id, cambios){
-    const actualizado = await Voluntariado.fundByIdAndUpdate(
+    const actualizado = await Voluntariado.findByIdAndUpdate(
         id,
         cambios,
         {new: true, runValidators: true}
@@ -97,4 +104,3 @@ export async function deleteVoluntariadoByIndex(index){
     await Voluntariado.deleteOne({_id: voluntariados[index]._id});
     return true;
 }
-

@@ -15,8 +15,12 @@ import cors from "cors";
 import bodyParser from "body-parser";
 import { graphqlHTTP } from "express-graphql";
 import jwt from "jsonwebtoken";
+import session from "express-session";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
+import { createServer } from "https";
+import { Server } from "socket.io";
 
 import { schema } from "./graphql/schema.js";
 import { root } from "./graphql/resolvers.js";
@@ -30,6 +34,51 @@ import { connectMongo } from "./database/mongoose.js";
  * @type {Express}
  */
 const app = express();
+const keyPath = path.join(process.cwd(), "certs", "dev.key");
+const certPath = path.join(process.cwd(), "certs", "dev.crt");
+
+const httpServer = createServer({
+  key: fs.readFileSync(keyPath),
+  cert: fs.readFileSync(certPath)
+}, app);
+const allowedOrigins = [
+  "http://localhost:5500",
+  "https://localhost:5500"
+];
+
+const io = new Server(httpServer, {
+  cors: {
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
+
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) {
+    return next();
+  }
+  try {
+    const user = jwt.verify(token, process.env.JWT_SECRET);
+    socket.user = {
+      ...user,
+      role: user.role ?? user.rol ?? "USER"
+    };
+    return next();
+  } catch (error) {
+    return next();
+  }
+});
+
+io.on("connection", (socket) => {
+  if (socket.user?.role === "ADMIN") {
+    socket.join("admins");
+  }
+  if (socket.user?.email) {
+    socket.join(`user:${socket.user.email}`);
+  }
+});
 
 /**
  * Puerto en el que escuchará el servidor.
@@ -46,7 +95,25 @@ app.use(bodyParser.json());
 /**
  * Middleware CORS que permite peticiones desde cualquier origen.
  */
-app.use(cors());
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true
+}));
+
+/**
+ * Middleware de sesión para mantener estado de usuario en servidor.
+ */
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "dev-session-secret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: "lax"
+    }
+  })
+);
 
 /**
  * Variables para resolver la ruta absoluta del archivo y directorio actual.
@@ -64,12 +131,19 @@ app.use("/docs", express.static(path.join(__dirname, "docs")));
  * Si el token es válido, se añade el usuario decodificado en req.user.
  */
 app.use((req, res, next) => {
+  if (req.session?.user) {
+    req.user = req.session.user;
+    return next();
+  }
   const authHeader = req.headers.authorization || "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
 
   if (token) {
     try {
       req.user = jwt.verify(token, process.env.JWT_SECRET);
+      if (req.user?.rol && !req.user.role) {
+        req.user.role = req.user.rol;
+      }
     } catch (err) {
       req.user = null;
     }
@@ -90,7 +164,7 @@ app.use(
     schema,
     rootValue: root,
     graphiql: true,
-    context: { user: req.user }
+    context: { user: req.user, io, req }
   }))
 );
 
@@ -101,8 +175,8 @@ app.use(
 async function startServer() {
   await connectMongo();
 
-  app.listen(port, () => {
-    console.log(`Servidor escuchando en http://localhost:${port}`);
+  httpServer.listen(port, () => {
+    console.log(`Servidor escuchando en https://localhost:${port}`);
   });
 }
 
