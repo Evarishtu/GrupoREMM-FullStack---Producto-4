@@ -1,4 +1,4 @@
-const GRAPHQL_URL = "http://localhost:3000/graphql";
+
 
 /* =========================
    Helper GraphQL
@@ -21,51 +21,45 @@ function fetchGraphQL(query, variables = {}) {
    (visible para no login y ADMIN)
 ========================= */
 async function addUsuario() {
-  const nombreInput = document.getElementById('nombre');
-  const emailInput = document.getElementById('email');
-  const passwordInput = document.getElementById('password');
+  const nombre = document.getElementById('nombre').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value.trim();
   const alerta = document.getElementById('alertaErrores');
-  const rol = localStorage.getItem("rol");
-  const token = localStorage.getItem("token");
-
-  // Permitido si NO login (registro) o ADMIN
-  if (token && rol !== "ADMIN") {
-    alerta.innerHTML = "No tienes permisos para crear usuarios.";
-    alerta.classList.remove('d-none');
-    return;
-  }
 
   alerta.classList.add('d-none');
   alerta.innerHTML = '';
 
-  const nombre = nombreInput.value.trim();
-  const email = emailInput.value.trim();
-  const password = passwordInput.value.trim();
   let errores = [];
 
-  if (!nombre) errores.push('<li>El campo Nombre es obligatorio.</li>');
-  if (!email) errores.push('<li>El campo Email es obligatorio.</li>');
-  else if (!esEmailValido(email)) errores.push('<li>Email no válido.</li>');
-  if (!password) errores.push('<li>El campo Password es obligatorio.</li>');
+  if (!nombre) errores.push('<li>El nombre es obligatorio</li>');
+  if (!email) errores.push('<li>El email es obligatorio</li>');
+  else if (!esEmailValido(email)) errores.push('<li>Email no válido</li>');
+  if (!password) errores.push('<li>La contraseña es obligatoria</li>');
   else if (!esPasswordValido(password))
-    errores.push('<li>La contraseña debe tener 8 caracteres alfanuméricos.</li>');
+    errores.push('<li>La contraseña debe tener 8 caracteres alfanuméricos</li>');
 
   if (errores.length > 0) {
-    alerta.innerHTML = 'Errores:<ul>' + errores.join('') + '</ul>';
+    alerta.innerHTML = `<ul>${errores.join('')}</ul>`;
     alerta.classList.remove('d-none');
     return;
   }
 
   const mutation = `
-    mutation ($nombre: String!, $email: String!, $password: String!) {
+    mutation CrearUsuario($nombre: String!, $email: String!, $password: String!) {
       crearUsuario(nombre: $nombre, email: $email, password: $password) {
+        id
         nombre
         email
+        rol
       }
     }
   `;
 
-  const res = await fetchGraphQL(mutation, { nombre, email, password });
+  const res = await fetchGraphQL(mutation, {
+    nombre,
+    email,
+    password
+  });
 
   if (res.errors) {
     alerta.innerHTML = res.errors[0].message;
@@ -170,6 +164,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const rol = localStorage.getItem("rol");
   const formAlta = document.getElementById("altaUsuario");
   const tabla = document.querySelector('.contenedor-consulta');
+
+   if (formAlta) {
+    formAlta.addEventListener("submit", (e) => {
+      e.preventDefault();
+      addUsuario();
+    });
+  }
 
   // NO LOGUEADO → solo registro
   if (!token) {

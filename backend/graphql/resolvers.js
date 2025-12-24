@@ -6,7 +6,6 @@
 import {
   getAllUsuarios,
   getUsuarioByEmail,
-  createUsuario,
   deleteUsuarioByEmail,
   deleteUsuarioByIndex
 } from "../models/usuario.model.js";
@@ -96,7 +95,7 @@ export const root = {
    * @returns {Promise<{id: string, titulo: string, usuario: string, fecha: string, descripcion: string, tipo: string} | null>}
    */
   voluntariadoPorId: async ({ id }, context) => {
-    require(context);
+    requireAuth(context);
     return getVoluntariadoById(id);
   },
 
@@ -110,30 +109,37 @@ export const root = {
    * @param {{nombre: string, email: string, password: string}} args
    * @returns {Promise<{id: string, nombre: string, email: string}>}
    */
- crearUsuario: async ({ nombre, email, password }) => {
-  const existente = await User.findOne({ email });
-  if (existente) {
-    throw new Error("Ya existe un usuario con ese email");
-  }
+  crearUsuario: async ({ nombre, email, password, rol }, context) => {
+    let rolFinal = "USER";
 
-  const hashed = await bcrypt.hash(password, 10);
+    // Solo ADMIN puede asignar rol explícitamente
+    if (rol && context?.user?.rol === "ADMIN") {
+      rolFinal = rol;
+    }
 
-  const user = new User({
-    nombre,
-    email,
-    password: hashed
-    // rol se asigna automáticamente como "USER"
-  });
+    const existente = await User.findOne({ email });
+    if (existente) {
+      throw new Error("Ya existe un usuario con ese email");
+    }
 
-  const saved = await user.save();
+    const hashed = await bcrypt.hash(password, 10);
 
-  return {
-    id: saved._id.toString(),
-    nombre: saved.nombre,
-    email: saved.email,
-    rol: saved.rol
-  };
-},
+    const user = new User({
+      nombre,
+      email,
+      password: hashed,
+      rol: rolFinal
+    });
+
+    const saved = await user.save();
+
+    return {
+      id: saved._id.toString(),
+      nombre: saved.nombre,
+      email: saved.email,
+      rol: saved.rol
+    };
+  },
 
   /**
    * Elimina un usuario por su dirección de correo electrónico.
@@ -208,17 +214,12 @@ login: async ({ email, password }) => {
    * @param {GraphQLContext} context
    * @returns {Promise<{id: string, titulo: string, usuario: string, fecha: string, descripcion: string, tipo: string}>}
    */
-  crearVoluntariado: async ({ titulo, usuario, fecha, descripcion, tipo }, context) => {
+  crearVoluntariado: async ({ titulo, fecha, descripcion, tipo }, context) => {
     requireAuth(context);
-
-    const tipoValido = ["PETICION", "OFERTA"];
-    if (!tipoValido.includes(tipo)) {
-      throw new Error("El tipo de voluntariado debe ser PETICION u OFERTA");
-    }
 
     return createVoluntariado({
       titulo,
-      usuario,
+      usuario: context.user.email, // 👈 SIEMPRE el usuario logueado
       fecha,
       descripcion,
       tipo
@@ -283,7 +284,7 @@ login: async ({ email, password }) => {
    * @returns {Promise<string>}
    */
   eliminarVoluntariado: async ({ id }, context) => {
-    requireAuth(context, "ADMIN");
+    requireRole(context, "ADMIN");
 
     const ok = await deleteVoluntariado(id);
     if (!ok) {

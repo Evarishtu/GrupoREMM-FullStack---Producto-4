@@ -22,15 +22,6 @@ document.addEventListener('DOMContentLoaded', function () {
         manejarLogin(); 
     });
   }
-
-  const form_usuarios = document.getElementById('altaUsuario');
-  if (form_usuarios) {
-    form_usuarios.addEventListener('submit', function (evento) {
-      evento.preventDefault();
-      addUsuario();
-    });
-  }
-
 });
 
 function addFlipCardListener() {
