@@ -1,4 +1,3 @@
-// const CLAVE_USUARIOS = 'usuarios';
 const CLAVE_USUARIO_ACTIVO = 'usuarioActivo';
 
 /** Definición del helpler común para GraphQL */
@@ -19,121 +18,6 @@ function fetchGraphQL(query, variables = {}) {
       variables
     })
   }).then(res => res.json());
-}
-
-/**
- * Inicializa los usuarios en localStorage SOLO si:
- * - No existe aún la clave "usuarios"
- * - Y existe el array global "usuarios" definido en data.js
- */
-function inicializarUsuariosSiVacio() {
-  try {
-    const guardados = localStorage.getItem(CLAVE_USUARIOS);
-
-    if (!guardados && Array.isArray(window.usuarios)) {
-      localStorage.setItem(CLAVE_USUARIOS, JSON.stringify(window.usuarios));
-    }
-  } catch (error) {
-    console.error('Error al inicializar usuarios en localStorage:', error);
-  }
-}
-
-/**
- * Obtiene la lista completa de usuarios desde localStorage.
- * @returns {Array<Object>} Lista de objetos de usuario, o un array vacío si no hay datos o hay un error.
- */
-function obtenerUsuarios() {
-  try {
-    const data = localStorage.getItem(CLAVE_USUARIOS);
-    if (!data) {
-      return [];
-    }
-    const lista = JSON.parse(data);
-    return Array.isArray(lista) ? lista : [];
-  } catch (error) {
-    console.error('Error al leer usuarios de localStorage:', error);
-    return [];
-  }
-}
-
-/**
- * Guarda la lista de usuarios en localStorage, sobrescribiendo el contenido existente.
- * @param {Array<Object>} lista - La lista de usuarios a guardar.
- */
-function guardarUsuarios(lista) {
-  try {
-    localStorage.setItem(CLAVE_USUARIOS, JSON.stringify(lista));
-  } catch (error) {
-    console.error('Error al guardar usuarios en localStorage:', error);
-  }
-}
-
-/**
- * Crea un nuevo usuario y lo añade a la lista almacenada en localStorage.
- * @param {Object} usuario - El objeto del nuevo usuario ({nombre, email, password}).
- */
-function crearUsuario(usuario) {
-  const lista = obtenerUsuarios();
-  lista.push(usuario);
-  guardarUsuarios(lista);
-}
-
-/**
- * Borra un usuario de la lista almacenada usando su índice en el array.
- * @param {number} indice - El índice del usuario a borrar.
- */
-function borrarUsuarioPorIndice(indice) {
-    const lista = obtenerUsuarios();
-    
-    if (indice >= 0 && indice < lista.length) {
-        // Obtener el nombre del usuario a borrar antes de eliminarlo
-        const usuarioBorrado = lista[indice].nombre; 
-        
-        // Eliminar el usuario
-        lista.splice(indice, 1);
-        guardarUsuarios(lista);
-
-        //  Si el usuario borrado era el activo, cerrar sesión
-        if (usuarioBorrado === obtenerUsuarioActivo()) {
-            limpiarUsuarioActivo();
-        }
-    }
-}
-
-/**
- * Borra un usuario de la lista almacenada usando su dirección de email.
- * @param {string} email - El email del usuario a borrar.
- */
-function borrarUsuarioPorEmail(email) {
-    const lista = obtenerUsuarios();
-    
-    // Buscar el usuario a borrar para ver si es el activo
-    const usuarioABorrar = lista.find(u => u.email === email);
-    const nombreUsuarioABorrar = usuarioABorrar ? usuarioABorrar.nombre : null;
-
-    // Filtrar la lista
-    const filtrados = lista.filter(function (u) {
-        return u.email !== email;
-    });
-    
-    guardarUsuarios(filtrados);
-
-    // Si el usuario borrado era el activo, cerrar sesión
-    if (nombreUsuarioABorrar && nombreUsuarioABorrar === obtenerUsuarioActivo()) {
-        limpiarUsuarioActivo();
-    }
-}
-
-/**
- * Comprueba si ya existe un usuario con la dirección de email proporcionada.
- * @param {string} email - El email a verificar.
- * @returns {boolean} True si el email ya existe, False en caso contrario.
- */
-function existeEmailUsuario(email) {
-  const lista = obtenerUsuarios();
-  return lista.some(function (u) {
-    return u.email === email;
-  });
 }
 
 /**
@@ -203,10 +87,11 @@ async function loguearUsuario(email, password) {
 
     const { token, usuario } = result.data.login;
 
-    // Guardar token y usuario
+    
     localStorage.setItem("token", token);
     localStorage.setItem(CLAVE_USUARIO_ACTIVO, usuario.nombre);
     localStorage.setItem("rol", usuario.rol);
+    localStorage.setItem("email", usuario.email);
 
     return usuario;
   } catch (error) {
@@ -215,6 +100,3 @@ async function loguearUsuario(email, password) {
   }
 }
 
-// document.addEventListener('DOMContentLoaded', function () {
-//   inicializarUsuariosSiVacio();
-// });
