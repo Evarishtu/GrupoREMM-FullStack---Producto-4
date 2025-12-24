@@ -77,7 +77,16 @@ export const root = {
    */
   voluntariados: async (_, context) => {
     requireAuth(context);
-    return getAllVoluntariados();
+
+    // ADMIN tiene acceso a todos los voluntariados
+    if (context.user.rol === "ADMIN") {
+      return getAllVoluntariados();
+    }
+
+    // USER solo tiene acceso a sus voluntariados
+    return getAllVoluntariados().filter(
+      v => v.usuario === context.user.email
+    );
   },
 
   /**
@@ -101,9 +110,30 @@ export const root = {
    * @param {{nombre: string, email: string, password: string}} args
    * @returns {Promise<{id: string, nombre: string, email: string}>}
    */
-  crearUsuario: async ({ nombre, email, password }) => {
-    return createUsuario({ nombre, email, password });
-  },
+ crearUsuario: async ({ nombre, email, password }) => {
+  const existente = await User.findOne({ email });
+  if (existente) {
+    throw new Error("Ya existe un usuario con ese email");
+  }
+
+  const hashed = await bcrypt.hash(password, 10);
+
+  const user = new User({
+    nombre,
+    email,
+    password: hashed
+    // rol se asigna automáticamente como "USER"
+  });
+
+  const saved = await user.save();
+
+  return {
+    id: saved._id.toString(),
+    nombre: saved.nombre,
+    email: saved.email,
+    rol: saved.rol
+  };
+},
 
   /**
    * Elimina un usuario por su dirección de correo electrónico.

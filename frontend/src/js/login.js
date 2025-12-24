@@ -18,7 +18,7 @@ function mostrarUsuarioActivo() {
  * Maneja la lógica completa del formulario de login: valida campos, llama a loguearUsuario(),
  * gestiona mensajes de error/éxito y actualiza el estado del usuario activo.
  */
-function manejarLogin() {
+async function manejarLogin() {
   const emailInput = document.getElementById('id');
   const passwordInput = document.getElementById('pass');
   const alerta = document.getElementById('alertaErrores');
@@ -52,7 +52,7 @@ function manejarLogin() {
   }
   
   // loguearUsuario() es la función de almacenaje.js que busca, valida la pass, y guarda la sesión.
-  const usuarioLogueado = loguearUsuario(email, password);
+  const usuarioLogueado = await loguearUsuario(email, password);
 
   if (!usuarioLogueado) {
     alerta.innerHTML = '<ul><li>Usuario o contraseña incorrectos.</li></ul>';
