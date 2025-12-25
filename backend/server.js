@@ -1,163 +1,83 @@
 /**
  * @module server
- * Servidor principal de la API GraphQL para el sistema de voluntariados.
- * Configura Express.js con middleware y el endpoint GraphQL.
+ * Servidor Fullstack JS - Producto 4
+ * Configura Express, Mongoose, GraphQL y WebSockets (Socket.io).
  */
 import dotenv from "dotenv";
-
-/**
- * Carga las variables de entorno desde el archivo .env.
- */
 dotenv.config();
 
 import express from "express";
 import cors from "cors";
-import bodyParser from "body-parser";
 import { graphqlHTTP } from "express-graphql";
 import jwt from "jsonwebtoken";
-import session from "express-session";
 import path from "path";
-import fs from "fs";
 import { fileURLToPath } from "url";
-import { createServer } from "https";
-import { Server } from "socket.io";
+import { createServer } from "http"; // Requerido para WebSockets
+import { Server } from "socket.io";   // Requerido para WebSockets
 
+// Importaciones de configuración propia
+import { connectDB } from "./database/database.js";
 import { schema } from "./graphql/schema.js";
 import { root } from "./graphql/resolvers.js";
-import { connectMongo } from "./database/mongoose.js";
 
-/** @typedef {Object} Express */
+const app = express();
+const port = process.env.PORT || 3000;
 
 /**
- * Aplicación Express principal.
- * @type {Express}
+ * 1. CONEXIÓN A BASE DE DATOS
+ * Usamos la nueva configuración de Mongoose
  */
-const app = express();
-const keyPath = path.join(process.cwd(), "certs", "dev.key");
-const certPath = path.join(process.cwd(), "certs", "dev.crt");
+connectDB();
 
-const httpServer = createServer(
-  {
-    key: fs.readFileSync(keyPath),
-    cert: fs.readFileSync(certPath),
-  },
-  app
-);
-const allowedOrigins = ["http://localhost:5500", "https://localhost:5500"];
-
+/**
+ * 2. CONFIGURACIÓN DEL SERVIDOR HTTP Y SOCKET.IO
+ */
+const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST"],
-    credentials: true,
-  },
-});
-
-io.use((socket, next) => {
-  const token = socket.handshake.auth?.token;
-  if (!token) {
-    return next();
-  }
-  try {
-    const user = jwt.verify(token, process.env.JWT_SECRET);
-    socket.user = {
-      ...user,
-      role: user.role ?? user.rol ?? "USER",
-    };
-    return next();
-  } catch (error) {
-    return next();
+    origin: "*", // En producción, especificar el dominio del frontend
+    methods: ["GET", "POST"]
   }
 });
 
-io.on("connection", (socket) => {
-  if (socket.user?.role === "ADMIN") {
-    socket.join("admins");
-  }
-  if (socket.user?.email) {
-    socket.join(`user:${socket.user.email}`);
-  }
-});
+// Hacemos que io sea accesible desde req para usarlo en los resolvers si fuera necesario
+app.set("socketio", io);
 
 /**
- * Puerto en el que escuchará el servidor.
- * Usa la variable de entorno PORT o 3000 por defecto.
- * @type {number|string}
+ * 3. MIDDLEWARES
  */
-const port = process.env.PORT || 4000;
+app.use(cors());
+app.use(express.json());
 
-/**
- * Middleware para parsear cuerpos JSON en las peticiones entrantes.
- */
-app.use(bodyParser.json());
-
-/**
- * Middleware CORS que permite peticiones desde cualquier origen.
- */
-app.use(
-  cors({
-    origin: allowedOrigins,
-    credentials: true,
-  })
-);
-
-/**
- * Middleware de sesión para mantener estado de usuario en servidor.
- */
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || "dev-session-secret",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      sameSite: "lax",
-    },
-  })
-);
-
-/**
- * Variables para resolver la ruta absoluta del archivo y directorio actual.
- */
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-/**
- * Middleware estático para servir la documentación JSDoc desde /docs.
- */
+// Documentación JSDoc
 app.use("/docs", express.static(path.join(__dirname, "docs")));
 
 /**
- * Middleware para extraer JWT del header Authorization: Bearer <token>.
- * Si el token es válido, se añade el usuario decodificado en req.user.
+ * 4. AUTENTICACIÓN MEJORADA (JWT + ROL)
  */
 app.use((req, res, next) => {
-  if (req.session?.user) {
-    req.user = req.session.user;
-    return next();
-  }
   const authHeader = req.headers.authorization || "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
 
   if (token) {
     try {
-      req.user = jwt.verify(token, process.env.JWT_SECRET);
-      if (req.user?.rol && !req.user.role) {
-        req.user.role = req.user.rol;
-      }
+      // El payload ahora incluirá el campo 'rol' (configurado en el login)
+      req.user = jwt.verify(token, process.env.JWT_SECRET || "dev_secret");
     } catch (err) {
       req.user = null;
     }
   } else {
     req.user = null;
   }
-
   next();
 });
 
 /**
- * Middleware GraphQL principal en la ruta /graphql.
- * Expone la API GraphQL completa con interfaz GraphiQL en desarrollo.
+ * 5. ENDPOINT GRAPHQL
+ * Se pasa el objeto 'io' en el context para emitir eventos desde los resolvers
  */
 app.use(
   "/graphql",
@@ -165,20 +85,30 @@ app.use(
     schema,
     rootValue: root,
     graphiql: true,
-    context: { user: req.user, io, req },
+    context: { 
+      user: req.user,
+      io: io // Permite enviar notificaciones en tiempo real al crear/borrar
+    }
   }))
 );
 
 /**
- * Inicia el servidor HTTP escuchando en el puerto configurado.
+ * 6. GESTIÓN DE EVENTOS SOCKET.IO
  */
+io.on("connection", (socket) => {
+  console.log(`Nuevo cliente conectado: ${socket.id}`);
 
-async function startServer() {
-  await connectMongo();
-
-  httpServer.listen(port, () => {
-    console.log(`Servidor escuchando en https://localhost:${port}`);
+  socket.on("disconnect", () => {
+    console.log("Cliente desconectado");
   });
-}
+});
 
-startServer();
+/**
+ * 7. ARRANQUE DEL SERVIDOR
+ * IMPORTANTE: Usamos httpServer.listen, NO app.listen
+ */
+httpServer.listen(port, () => {
+  console.log(`Servidor Fullstack listo en http://localhost:${port}`);
+  console.log(`GraphQL Playground: http://localhost:${port}/graphql`);
+  console.log(`WebSockets activos`);
+});

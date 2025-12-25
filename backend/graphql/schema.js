@@ -1,26 +1,22 @@
 import { buildSchema } from "graphql";
 
-/** @typedef {Object} GraphQLSchema */
-
 /**
- * Esquema GraphQL completo de la aplicación.
- * Define todos los tipos, queries y mutations disponibles en la API.
- *
- * @type {GraphQLSchema}
+ * Esquema GraphQL Actualizado - Producto 4
+ * Incluye: Roles de usuario, IDs y tipos de datos para Mongoose.
  */
 export const schema = buildSchema(`
     """
-    Representa un usuario del sistema con sus datos públicos.
+    Representa un usuario del sistema con control de roles.
     """
     type Usuario {
         id: ID!
         nombre: String!
         email: String!
-        role: String!
+        rol: String!
     }
 
     """
-    Respuesta de autenticación: token JWT y datos públicos del usuario.
+    Respuesta de autenticación que incluye el token JWT y los datos del usuario logueado.
     """
     type AuthPayload {
         token: String!
@@ -36,8 +32,8 @@ export const schema = buildSchema(`
     }
 
     """
-    Representa un voluntariado publicado en el sistema.
-    Puede ser una oferta de servicios o una petición de ayuda.
+    Representa un voluntariado. 
+    Nota: El campo 'usuario' ahora suele referenciar al email o ID del creador.
     """
     type Voluntariado {
         id: ID!
@@ -49,58 +45,54 @@ export const schema = buildSchema(`
     }
 
     """
-    Queries disponibles para consultar datos del sistema.
+    Queries para recuperación de datos.
+    El acceso a estas queries será filtrado en los resolvers según el ROL.
     """
     type Query {
-
         """
-        Obtiene la lista completa de todos los usuarios registrados.
+        Obtiene todos los usuarios (Solo para Admin).
         """
         usuarios: [Usuario!]!
 
         """
-        Busca un usuario específico por su dirección de correo electrónico.
+        Busca un usuario por email.
         """
         usuarioPorEmail(email: String!): Usuario
 
         """
-        Obtiene la lista completa de todos los voluntariados disponibles.
+        Lista todos los voluntariados (Los usuarios ven todos, los Admin gestionan todos).
         """
         voluntariados: [Voluntariado!]!
 
         """
-        Busca un voluntariado específico por su identificador único.
+        Busca un voluntariado específico por su ID de MongoDB.
         """
         voluntariadoPorId(id: ID!): Voluntariado
     }
 
     """
-    Mutations disponibles para modificar datos del sistema.
+    Mutations para modificar datos. 
+    Se implementa lógica de seguridad: 'admin' puede todo, 'user' solo lo propio.
     """
     type Mutation {
 
         """
-        Crea un nuevo usuario en el sistema.
+        Crea un usuario. Ahora permite especificar el rol (opcional, por defecto 'user').
         """
-        crearUsuario(nombre: String!, email: String!, password: String!): Usuario!
+        crearUsuario(nombre: String!, email: String!, password: String!, rol: String): Usuario!
 
         """
-        Elimina un usuario específico por su email.
+        Elimina un usuario (Normalmente restringido a Admin).
         """
         borrarUsuarioPorEmail(email: String!): String!
 
         """
-        Elimina un usuario por su posición en la lista (índice).
-        """
-        borrarUsuarioPorIndice(indice: Int!): String!
-
-        """
-        Inicia sesión validando credenciales y devuelve token JWT.
+        Inicia sesión y genera el token con la información del ROL.
         """
         login(email: String!, password: String!): AuthPayload!
 
         """
-        Crea un nuevo voluntariado en el sistema.
+        Crea un voluntariado y emite un evento por WebSockets.
         """
         crearVoluntariado(
             titulo: String!,
@@ -111,8 +103,8 @@ export const schema = buildSchema(`
         ): Voluntariado!
 
         """
-        Actualiza los campos de un voluntariado existente por su ID.
-        Solo se actualizan los campos proporcionados.
+        Actualiza un voluntariado por ID. 
+        El servidor verificará si el usuario es dueño del post o es Admin.
         """
         actualizarVoluntariado(
             id: ID!,
@@ -124,26 +116,11 @@ export const schema = buildSchema(`
         ): String!
 
         """
-        Actualiza los campos de un voluntariado por su posición en la lista (índice).
-        Solo se actualizan los campos proporcionados.
-        """
-        actualizarVoluntariadoPorIndice(
-            indice: Int!,
-            titulo: String,
-            usuario: String,
-            fecha: String,
-            descripcion: String,
-            tipo: TipoVoluntariado
-        ): String!
-
-        """
-        Elimina un voluntariado específico por su ID.
+        Elimina un voluntariado por ID.
         """
         eliminarVoluntariado(id: ID!): String!
 
-        """
-        Elimina un voluntariado por su posición en la lista (índice).
-        """
-        eliminarVoluntariadoPorIndice(indice: Int!): String!
+        # Nota: Se recomienda eliminar los métodos 'PorIndice' ya que al usar 
+        # MongoDB/Mongoose, el ID es el identificador único fiable.
     }
 `);
