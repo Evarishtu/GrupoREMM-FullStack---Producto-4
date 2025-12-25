@@ -1,163 +1,166 @@
-var GRAPHQL_ENDPOINT =
-  window.GRAPHQL_ENDPOINT || "https://hrmfz4-5000.csb.app/graphql";
-window.GRAPHQL_ENDPOINT = GRAPHQL_ENDPOINT;
-const CLAVE_USUARIO_ACTIVO = "usuarioActivo";
+// almacenaje.js
 
+// Configuración del Endpoint
+window.GRAPHQL_ENDPOINT = null;
+
+function determinarEndpoint() {
+  const hostActual = window.location.host;
+  if (hostActual.includes("csb.app")) {
+    const hostBackend = hostActual.replace("-4000", "-5000");
+    return `https://${hostBackend}/graphql`;
+  }
+  return "http://localhost:5000/graphql";
+}
+
+const GRAPHQL_ENDPOINT = determinarEndpoint();
+window.GRAPHQL_ENDPOINT = GRAPHQL_ENDPOINT;
+
+// Helper de Peticiones GraphQL
 async function graphqlRequest(query, variables = {}) {
   const token = localStorage.getItem("jwt");
-  const headers = {
-    "Content-Type": "application/json",
-  };
+  const headers = { "Content-Type": "application/json" };
 
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const response = await fetch(GRAPHQL_ENDPOINT, {
-    method: "POST",
-    headers,
-    credentials: "include",
-    body: JSON.stringify({ query, variables }),
-  });
+  try {
+    const response = await fetch(window.GRAPHQL_ENDPOINT, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query, variables }),
+    });
 
-  const result = await response.json();
-  if (result.errors) {
-    throw new Error(result.errors.map((e) => e.message).join("\n"));
+    const result = await response.json();
+
+    if (result.errors) {
+      if (result.errors.some((e) => e.message.includes("autenticado"))) {
+        console.warn("Token inválido o expirado.");
+        localStorage.removeItem("jwt");
+      }
+      throw new Error(result.errors.map((e) => e.message).join("\n"));
+    }
+    return result.data;
+  } catch (error) {
+    console.error("Fallo en graphqlRequest:", error);
+    throw error;
   }
-  return result.data;
 }
 
-/**
- * Obtiene la lista completa de usuarios desde el backend.
- * @returns {Promise<Array<Object>>} Lista de usuarios.
- */
+// Gestión de Usuarios
 async function obtenerUsuarios() {
-  const query = `
-    query Usuarios {
-      usuarios {
-        id
-        nombre
-        email
-        role
-      }
+  const query = `query ObtenerUsuarios {
+    usuarios {
+      id
+      nombre
+      email
+      role
+      password
     }
-  `;
+  }`;
   const data = await graphqlRequest(query);
-  return data.usuarios || [];
+  return data.usuarios;
 }
 
-/**
- * Crea un nuevo usuario en el backend.
- * @param {Object} usuario - El objeto del nuevo usuario ({nombre, email, password}).
- */
 async function crearUsuario(usuario) {
-  const mutation = `
-    mutation CrearUsuario($nombre: String!, $email: String!, $password: String!) {
-      crearUsuario(nombre: $nombre, email: $email, password: $password) {
-        id
-        nombre
-        email
-        role
-      }
+  const mutation = `mutation CrearUsuario($nombre: String!, $email: String!, $password: String!, $role: String) {
+    crearUsuario(nombre: $nombre, email: $email, password: $password, role: $role) { 
+      id 
+      nombre 
+      email 
+      role 
     }
-  `;
+  }`;
+
+  // Enviamos el objeto usuario completo que ya contiene el role
   const data = await graphqlRequest(mutation, usuario);
   return data.crearUsuario;
 }
 
-/**
- * Borra un usuario usando su índice en el listado del backend.
- * @param {number} indice - El índice del usuario a borrar.
- */
-async function borrarUsuarioPorIndice(indice) {
-  const mutation = `
-    mutation BorrarUsuarioPorIndice($indice: Int!) {
-      borrarUsuarioPorIndice(indice: $indice)
-    }
-  `;
-  await graphqlRequest(mutation, { indice });
-}
-
-/**
- * Borra un usuario usando su dirección de email.
- * @param {string} email - El email del usuario a borrar.
- */
 async function borrarUsuarioPorEmail(email) {
-  const mutation = `
-    mutation BorrarUsuarioPorEmail($email: String!) {
-      borrarUsuarioPorEmail(email: $email)
-    }
-  `;
+  const mutation = `mutation BorrarUsuarioPorEmail($email: String!) { borrarUsuarioPorEmail(email: $email) }`;
   await graphqlRequest(mutation, { email });
 }
 
-/**
- * Comprueba si ya existe un usuario con la dirección de email proporcionada.
- * @param {string} email - El email a verificar.
- * @returns {boolean} True si el email ya existe, False en caso contrario.
- */
-async function existeEmailUsuario(email) {
-  const lista = await obtenerUsuarios();
-  return lista.some((u) => u.email === email);
-}
-
-/**
- * Almacena el nombre del usuario que ha iniciado sesión en localStorage.
- * @param {string} nombre - El nombre del usuario activo.
- */
-function guardarUsuarioActivo(nombre) {
-  try {
-    localStorage.setItem(CLAVE_USUARIO_ACTIVO, nombre);
-  } catch (error) {
-    console.error("Error al guardar el usuario activo:", error);
-  }
-}
-
-/**
- * Obtiene el nombre del usuario actualmente activo desde localStorage.
- * @returns {string|null} El nombre del usuario activo, o null si no hay sesión activa o hay un error.
- */
-function obtenerUsuarioActivo() {
-  try {
-    return localStorage.getItem(CLAVE_USUARIO_ACTIVO);
-  } catch (error) {
-    console.error("Error al obtener el usuario activo:", error);
-    return null;
-  }
-}
-
-/**
- * Elimina la clave de usuario activo de localStorage, cerrando la sesión.
- */
-function limpiarUsuarioActivo() {
-  try {
-    localStorage.removeItem(CLAVE_USUARIO_ACTIVO);
-  } catch (error) {
-    console.error("Error al limpiar el usuario activo:", error);
-  }
-}
-
-/**
- * Autentica un usuario verificando las credenciales contra la lista almacenada.
- * Cumple con el requisito de encapsular la lógica de autenticación en el módulo de persistencia.
- * @param {string} email - Email proporcionado por el usuario.
- * @param {string} password - Contraseña proporcionada por el usuario.
- * @returns {Object|null} El objeto de usuario encontrado y logueado, o null si falla.
- */
+// Gestión de Sesión
 async function loguearUsuario(email, password) {
-  const mutation = `
-    mutation Login($email: String!, $password: String!) {
-      login(email: $email, password: $password) {
-        token
-        usuario {
-          nombre
-          email
-          role
-        }
-      }
+  const mutation = `mutation Login($email: String!, $password: String!) {
+    login(email: $email, password: $password) {
+      token
+      usuario { nombre email role }
     }
-  `;
-
+  }`;
   const data = await graphqlRequest(mutation, { email, password });
   return data.login;
 }
+
+function cerrarSesion() {
+  localStorage.clear();
+  window.location.href = "/src/pages/login.html";
+}
+window.cerrarSesion = cerrarSesion;
+
+// Utilidades de Voluntariados
+const IMAGES_POOL = [
+  "https://www.hillspet.com/content/dam/cp-sites-aem/hills/hills-pet/legacy-articles/inset/beagle-with-tongue-out.jpg",
+  "https://image.petmd.com/files/inline-images/shiba-inu-black-and-tan-colors.jpg?VersionId=pLq84BEOjdMjXeDCUJJJLFPuIWYsVMUU",
+  "https://www.minino.com/wp-content/uploads/2025/01/nota-de-blog-31-enero.png.webp",
+  "https://15f8034cdff6595cbfa1-1dd67c28d3aade9d3442ee99310d18bd.ssl.cf3.rackcdn.com/uploaded_thumb_big/c1dc328c546f572dfe66453867eeffb8/cuidar_iguana_domestica_consejos_clinica_veterinaria_la_granja_aviles.png",
+];
+
+function getImageForVolunteering(v) {
+  let hash = 0;
+  const str = v.id || v.titulo || "";
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % IMAGES_POOL.length;
+  return IMAGES_POOL[index];
+}
+
+const leerComoBase64 = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = (error) => reject(error);
+  });
+
+// Handlers de Drag & Drop (Globales)
+window.dragstartHandler = function (ev) {
+  ev.dataTransfer.setData("text/plain", ev.currentTarget.id);
+};
+window.dragoverHandler = function (ev) {
+  ev.preventDefault();
+};
+window.dropHandler = function (ev) {
+  ev.preventDefault();
+  const data = ev.dataTransfer.getData("text/plain");
+  const draggedElement = document.getElementById(data);
+  const dropZone = ev.target.closest(".drop-zone");
+  if (draggedElement && dropZone) {
+    dropZone.appendChild(draggedElement);
+  }
+};
+
+/**
+ * Comprueba si un email ya existe consultando la base de datos.
+ */
+async function existeEmailUsuario(email) {
+  try {
+    // Obtenemos la lista actualizada directamente del servidor
+    const usuarios = await obtenerUsuarios();
+    if (!usuarios) return false;
+
+    // Buscamos coincidencia exacta (ignorando mayúsculas/minúsculas)
+    return usuarios.some(
+      (u) => u.email.toLowerCase() === email.trim().toLowerCase()
+    );
+  } catch (error) {
+    console.error("Error en existeEmailUsuario:", error);
+    return false;
+  }
+}
+
+// IMPORTANTE: Exportar la función al objeto window
+window.existeEmailUsuario = existeEmailUsuario;

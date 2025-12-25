@@ -1,13 +1,19 @@
-(() => {
-  // Configuration
-  const GRAPHQL_ENDPOINT = "https://hrmfz4-5000.csb.app/graphql";
-  const SOCKET_IO_ENDPOINT = "https://hrmfz4-5000.csb.app";
+// int_1_dashboard.js
 
-  // State
+if (!localStorage.getItem("jwt")) {
+  window.location.href = window.location.origin + "/src/pages/login.html";
+}
+
+(() => {
+  const GRAPHQL_ENDPOINT =
+    window.GRAPHQL_ENDPOINT ||
+    `https://${window.location.host.replace("-4000", "-5000")}/graphql`;
+  const SOCKET_IO_ENDPOINT = GRAPHQL_ENDPOINT.replace("/graphql", "");
+
   let currentUser = null;
   let socket = null;
+  let todosLosVoluntariados = [];
 
-  // Images pool (since backend doesn't store images)
   const IMAGES = [
     "https://www.hillspet.com/content/dam/cp-sites-aem/hills/hills-pet/legacy-articles/inset/beagle-with-tongue-out.jpg",
     "https://image.petmd.com/files/inline-images/shiba-inu-black-and-tan-colors.jpg?VersionId=pLq84BEOjdMjXeDCUJJJLFPuIWYsVMUU",
@@ -17,7 +23,7 @@
 
   function getImageForVolunteering(v) {
     let hash = 0;
-    const str = v.id || v.titulo;
+    const str = v.id || v.titulo || "";
     for (let i = 0; i < str.length; i++) {
       hash = str.charCodeAt(i) + ((hash << 5) - hash);
     }
@@ -25,12 +31,9 @@
     return IMAGES[index];
   }
 
-  // GraphQL Helper
   async function graphqlRequest(query, variables = {}) {
     const token = localStorage.getItem("jwt");
-    const headers = {
-      "Content-Type": "application/json",
-    };
+    const headers = { "Content-Type": "application/json" };
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
@@ -38,7 +41,6 @@
     const response = await fetch(GRAPHQL_ENDPOINT, {
       method: "POST",
       headers,
-      credentials: "include",
       body: JSON.stringify({ query, variables }),
     });
 
@@ -49,88 +51,71 @@
     return result.data;
   }
 
-  // Queries & Mutations
   const GET_USER_BY_EMAIL = `
-  query UsuarioPorEmail($email: String!) {
-    usuarioPorEmail(email: $email) {
-      id
-      nombre
-      email
-      role
+    query UsuarioPorEmail($email: String!) {
+      usuarioPorEmail(email: $email) { id nombre email role }
     }
-  }
-`;
+  `;
 
   const GET_VOLUNTEERINGS = `
-  query Voluntariados {
-    voluntariados {
-      id
-      titulo
-      usuario
-      fecha
-      descripcion
-      tipo
+    query Voluntariados {
+      voluntariados { id titulo usuario fecha descripcion tipo imagen }
     }
-  }
-`;
+  `;
 
   const CREATE_VOLUNTEERING = `
-  mutation CrearVoluntariado($titulo: String!, $usuario: String!, $fecha: String!, $descripcion: String!, $tipo: TipoVoluntariado!) {
-    crearVoluntariado(titulo: $titulo, usuario: $usuario, fecha: $fecha, descripcion: $descripcion, tipo: $tipo) {
-      id
-      titulo
-      usuario
-      fecha
-      descripcion
-      tipo
+    mutation CrearVoluntariado($titulo: String!, $usuario: String!, $fecha: String!, $descripcion: String!, $tipo: TipoVoluntariado!, $imagen: String) {
+      crearVoluntariado(titulo: $titulo, usuario: $usuario, fecha: $fecha, descripcion: $descripcion, tipo: $tipo, imagen: $imagen) {
+        id titulo usuario fecha descripcion tipo
+      }
     }
-  }
-`;
+  `;
 
-  // Main Initialization
   document.addEventListener("DOMContentLoaded", async () => {
     const token = localStorage.getItem("jwt");
-    if (!token) {
-      window.location.href = "./src/pages/login.html";
+    const email = localStorage.getItem("usuarioEmail");
+
+    if (!token || !email) {
+      window.location.href = window.location.origin + "/src/pages/login.html";
       return;
     }
 
     try {
-      // 1. Get User Info
-      const email = localStorage.getItem("usuarioEmail");
-      if (!email) {
-        window.location.href = "./src/pages/login.html";
-        return;
-      }
-
       const userData = await graphqlRequest(GET_USER_BY_EMAIL, { email });
       currentUser = userData.usuarioPorEmail;
 
-      // Update UI with user name
+      // LLAMADA A UTILS PARA EL HEADER
+      if (typeof inicializarInterfazUsuario === "function") {
+        inicializarInterfazUsuario();
+        setTimeout(inicializarInterfazUsuario, 500);
+      }
+
+      if (
+        currentUser.role !== "ADMIN" &&
+        window.location.pathname.includes("usuarios.html")
+      ) {
+        window.location.href =
+          window.location.origin + "/src/pages/dashboard.html";
+        return;
+      }
+
+      if (typeof addMenu === "function") addMenu();
+
       const userField = document.getElementById("usuario-logueado");
       if (userField) userField.textContent = currentUser.nombre;
 
-      // 2. Load Volunteerings
       await loadVolunteerings();
-
-      // 3. Setup Socket.io
       setupSocket();
-
-      // 4. Setup Create Form
       setupCreateForm();
+      configurarFiltros();
     } catch (error) {
       console.error("Error initializing dashboard:", error);
       if (
-        error.message.includes("jwt") ||
-        error.message.includes("auth") ||
-        error.message.includes("permisos")
+        error.message.toLowerCase().includes("autenticado") ||
+        error.message.includes("jwt")
       ) {
-        alert(
-          "Sesión expirada o inválida. Por favor inicie sesión nuevamente."
-        );
-        window.location.href = "./src/pages/login.html";
-      } else {
-        alert("Error loading dashboard: " + error.message);
+        localStorage.clear();
+        window.location.href = window.location.origin + "/src/pages/login.html";
       }
     }
   });
@@ -138,153 +123,157 @@
   async function loadVolunteerings() {
     try {
       const data = await graphqlRequest(GET_VOLUNTEERINGS);
-      let list = data.voluntariados;
+      todosLosVoluntariados = data.voluntariados || [];
 
-      // Filter based on role
-      if (currentUser.role !== "ADMIN") {
-        list = list.filter((v) => v.usuario === currentUser.email);
-      }
-
-      // Map to UI format (add images)
-      const uiList = list.map((v) => ({
+      const uiList = todosLosVoluntariados.map((v) => ({
         ...v,
         imagenFondo: getImageForVolunteering(v),
-        tipo: v.tipo.toLowerCase(), // Backend is UPPERCASE, UI expects lowercase for CSS classes
+        tipo: v.tipo.toLowerCase(),
       }));
 
       mostrarDashboard(uiList);
       setupDropZones();
       loadLayout();
     } catch (e) {
-      console.error(e);
-      alert("Error loading volunteerings");
+      console.error("Error al cargar:", e);
     }
+  }
+
+  function configurarFiltros() {
+    const btnPropias = document.getElementById("btn-propias");
+    const btnOtras = document.getElementById("btn-otras");
+    const btnTodas = document.getElementById("btn-todas");
+    const emailActivo = localStorage.getItem("usuarioEmail");
+
+    const aplicarFiltro = (listaFiltrada) => {
+      const uiList = listaFiltrada.map((v) => ({
+        ...v,
+        imagenFondo: getImageForVolunteering(v),
+        tipo: v.tipo.toLowerCase(),
+      }));
+      mostrarDashboard(uiList);
+    };
+
+    btnPropias?.addEventListener("click", () => {
+      aplicarFiltro(
+        todosLosVoluntariados.filter((v) => v.usuario === emailActivo)
+      );
+    });
+
+    btnOtras?.addEventListener("click", () => {
+      aplicarFiltro(
+        todosLosVoluntariados.filter((v) => v.usuario !== emailActivo)
+      );
+    });
+
+    btnTodas?.addEventListener("click", () => {
+      aplicarFiltro(todosLosVoluntariados);
+    });
   }
 
   function setupSocket() {
-    if (typeof io === "undefined") {
-      console.error("Socket.io library not loaded");
-      return;
-    }
-
-    const token = localStorage.getItem("jwt");
+    if (typeof io === "undefined") return;
     socket = io(SOCKET_IO_ENDPOINT, {
-      auth: {
-        token,
-      },
+      auth: { token: localStorage.getItem("jwt") },
     });
-
-    socket.on("connect", () => {
-      console.log("Connected to Socket.io");
-    });
-
     socket.on("voluntariado_creado", () => loadVolunteerings());
     socket.on("voluntariado_actualizado", () => loadVolunteerings());
     socket.on("voluntariado_eliminado", () => loadVolunteerings());
-    socket.on("voluntariado_seleccionado", () => loadVolunteerings());
   }
+
+  const leerComoBase64 = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = (error) => reject(error);
+    });
 
   function setupCreateForm() {
     const form = document.getElementById("createForm");
-    if (!form) return;
+    if (!form || form.dataset.bound === "true") return;
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
+      const btnSubmit = form.querySelector('[type="submit"]');
+      if (btnSubmit) btnSubmit.disabled = true;
 
-      const titulo = document.getElementById("titulo").value;
-      const descripcion = document.getElementById("descripcion").value;
-      const fecha = document.getElementById("fecha").value;
-      const tipo = document.getElementById("tipo").value; // OFERTA or PETICION
+      const inputImagen = document.getElementById("imagenInput");
+      let imagenBase64 = "";
+      if (inputImagen?.files?.[0]) {
+        imagenBase64 = await leerComoBase64(inputImagen.files[0]);
+      }
+
+      const variables = {
+        titulo: document.getElementById("titulo").value,
+        descripcion: document.getElementById("descripcion").value,
+        fecha: document.getElementById("fecha").value,
+        tipo: document.getElementById("tipo").value,
+        usuario: currentUser.email,
+        imagen: imagenBase64,
+      };
 
       try {
-        await graphqlRequest(CREATE_VOLUNTEERING, {
-          titulo,
-          usuario: currentUser.email,
-          fecha,
-          descripcion,
-          tipo,
-        });
-
-        // Close modal
-        const modalEl = document.getElementById("createModal");
-        const modal = bootstrap.Modal.getInstance(modalEl);
-        modal.hide();
-
-        // Reset form
+        await graphqlRequest(CREATE_VOLUNTEERING, variables);
+        const modal = bootstrap.Modal.getInstance(
+          document.getElementById("createModal")
+        );
+        if (modal) modal.hide();
         form.reset();
-
-        // Refresh list (Socket.io will also trigger this, but good to be sure)
         await loadVolunteerings();
       } catch (error) {
-        alert("Error creating volunteering: " + error.message);
+        alert("Error: " + error.message);
+      } finally {
+        if (btnSubmit) btnSubmit.disabled = false;
       }
     });
+    form.dataset.bound = "true";
   }
-
-  // ==========================================
-  // UI Logic (Adapted from original)
-  // ==========================================
 
   function mostrarDashboard(voluntariadosList) {
     const data_ofertas = document.querySelector("#ofertas");
+    if (!data_ofertas) return;
     data_ofertas.innerHTML = "";
 
     voluntariadosList.forEach((item) => {
-      if (!item.id) return;
       const typeClass =
         item.tipo === "peticion" ? "bg-dark-type text-white" : "bg-light-type";
-      const textClass = "text-white";
+      const imagenAUsar =
+        item.imagen || item.imagenFondo || getImageForVolunteering(item);
 
       const fila = `
-      <div class="flip-card" id="item-${item.id}" draggable="true" ondragstart="dragstartHandler(event)">
-        <div class="flip-card-inner" data-id="${item.id}">
-          <div class="card p-3 card-front ${typeClass}">
-            <h5 class="card-title-lg ${textClass}">${item.titulo}</h5>
-            <p class="card-subtitle-sm mb-2 ${textClass}">${item.fecha}</p>
-            <p class="card-text-desc ${textClass}">${item.descripcion}</p>
-            <small class="card-subtitle mt-auto ${textClass}">
-              <strong>Publicado por:</strong><br> ${item.usuario}
-            </small>
-          </div>
-
-          <div class="card p-3 card-back image-back-styled ${typeClass}">
-            <div class="back-image-container">
-              <img src="${item.imagenFondo}" alt="${item.titulo}" class="img-fluid back-image-centered">
+        <div class="flip-card" id="item-${item.id}" draggable="true" ondragstart="dragstartHandler(event)">
+          <div class="flip-card-inner" data-id="${item.id}">
+            <div class="card p-3 card-front ${typeClass}">
+              <h5 class="card-title-lg text-white">${item.titulo}</h5>
+              <p class="card-subtitle-sm mb-2 text-white">${item.fecha}</p>
+              <p class="card-text-desc text-white">${item.descripcion}</p>
+              <small class="card-subtitle mt-auto text-white">
+                <strong>Publicado por:</strong><br> ${item.usuario}
+              </small>
             </div>
-            <div class="back-info-text-group mt-auto ${textClass}">
-              <h5>GRUPO REMM</h5>
-              <p class="mb-0">Des. full stack de sol. web JavaScript y serv. web</p>
+            <div class="card p-3 card-back image-back-styled ${typeClass}">
+              <div class="back-image-container">
+                <img src="${imagenAUsar}" class="img-fluid back-image-centered" onerror="this.src='https://via.placeholder.com/150'">
+              </div>
+              <div class="back-info-text-group mt-auto text-white text-center">
+                <h5>GRUPO REMM</h5>
+                <p class="mb-0">Soluciones Web JavaScript</p>
+              </div>
             </div>
           </div>
-
         </div>
-      </div>
-    `;
-
+      `;
       data_ofertas.innerHTML += fila;
     });
-
-    // Note: addFlipCardListener was called in original but not defined in the file I read.
-    // It might be in listener.js or utils.js. I should check if I need to call it.
-    // The original file called it.
-    if (typeof addFlipCardListener === "function") {
-      addFlipCardListener();
-    }
+    if (typeof addFlipCardListener === "function") addFlipCardListener();
   }
 
   function setupDropZones() {
     document.querySelectorAll(".drop-zone").forEach((zone) => {
-      zone.addEventListener("dragover", dragoverHandler);
+      zone.addEventListener("dragover", (e) => e.preventDefault());
       zone.addEventListener("drop", dropHandler);
     });
-  }
-
-  function dragstartHandler(ev) {
-    ev.dataTransfer.setData("text/plain", ev.currentTarget.id);
-  }
-
-  function dragoverHandler(ev) {
-    ev.preventDefault();
   }
 
   function dropHandler(ev) {
@@ -292,63 +281,33 @@
     const data = ev.dataTransfer.getData("text/plain");
     const draggedElement = document.getElementById(data);
     const dropZone = ev.target.closest(".drop-zone");
-
     if (draggedElement && dropZone) {
       dropZone.appendChild(draggedElement);
+      saveLayout();
     }
-
-    saveLayout();
   }
 
   function saveLayout() {
-    const boxes = document.querySelectorAll(".drop-zone[id]");
     const layout = {};
-
-    boxes.forEach((box) => {
-      const boxId = box.id;
-      const childrenIds = Array.from(box.querySelectorAll(".flip-card"))
-        .map((el) => el.id)
-        .filter((id) => id);
-      layout[boxId] = childrenIds;
+    document.querySelectorAll(".drop-zone[id]").forEach((box) => {
+      layout[box.id] = Array.from(box.querySelectorAll(".flip-card")).map(
+        (el) => el.id
+      );
     });
-
     localStorage.setItem("layout", JSON.stringify(layout));
   }
 
   function loadLayout() {
     const raw = localStorage.getItem("layout");
     if (!raw) return;
-    let layout;
-    try {
-      layout = JSON.parse(raw);
-    } catch (e) {
-      console.error("Could not parse saved layout:", e);
-      return;
-    }
-
-    let layoutCambiado = false;
-
+    const layout = JSON.parse(raw);
     Object.keys(layout).forEach((boxId) => {
       const box = document.getElementById(boxId);
       if (!box) return;
-
-      const idsExistentes = layout[boxId].filter((itemId) => {
+      layout[boxId].forEach((itemId) => {
         const item = document.getElementById(itemId);
-        if (item) {
-          box.appendChild(item);
-          return true;
-        }
-        layoutCambiado = true;
-        return false;
+        if (item) box.appendChild(item);
       });
-
-      if (layoutCambiado) {
-        layout[boxId] = idsExistentes;
-      }
     });
-
-    if (layoutCambiado) {
-      localStorage.setItem("layout", JSON.stringify(layout));
-    }
   }
 })();

@@ -1,54 +1,16 @@
-/**
- * Muestra el nombre del usuario activo en el campo del menú o vista de login.
- */
-function mostrarUsuarioActivo() {
-  const usuario_activo = obtenerUsuarioActivo();
-  const campo = document.getElementById("usuario-logueado");
-
-  if (!campo) return;
-
-  if (usuario_activo) {
-    campo.textContent = usuario_activo;
-  } else {
-    campo.textContent = "-no login-";
-  }
-}
-
-/**
- * Maneja la lógica completa del formulario de login: valida campos, llama a loguearUsuario(),
- * gestiona mensajes de error/éxito y actualiza el estado del usuario activo.
- */
 async function manejarLogin() {
   const emailInput = document.getElementById("id");
   const passwordInput = document.getElementById("pass");
   const alerta = document.getElementById("alertaErrores");
 
-  // Reset alerta
   alerta.classList.add("d-none");
-  alerta.classList.remove("alert-success");
-  alerta.classList.add("alert-danger");
   alerta.innerHTML = "";
 
-  const email = emailInput.value.trim();
+  const emailValue = emailInput.value.trim();
   const password = passwordInput.value;
-  let errores = [];
 
-  if (!email) {
-    errores.push("<li>El campo Email es obligatorio.</li>");
-  } else if (!esEmailValido(email)) {
-    errores.push("<li>El formato del Email no es correcto.</li>");
-  }
-
-  if (!password) {
-    errores.push("<li>El campo Contraseña es obligatorio.</li>");
-  } else if (!esPasswordValido(password)) {
-    errores.push(
-      "<li>La contraseña debe tener exactamente 8 caracteres alfanuméricos.</li>"
-    );
-  }
-
-  if (errores.length > 0) {
-    alerta.innerHTML = "Errores:<ul>" + errores.join("") + "</ul>";
+  if (!emailValue || !password) {
+    alerta.innerHTML = "Por favor, completa todos los campos.";
     alerta.classList.remove("d-none");
     return;
   }
@@ -60,21 +22,19 @@ async function manejarLogin() {
           token
           usuario {
             nombre
-            email
             role
+            email
           }
         }
       }
     `;
 
-    const response = await fetch("https://hrmfz4-5000.csb.app/graphql", {
+    const response = await fetch(window.GRAPHQL_ENDPOINT, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         query,
-        variables: { email, password },
+        variables: { email: emailValue, password: password },
       }),
     });
 
@@ -86,35 +46,37 @@ async function manejarLogin() {
 
     const { token, usuario } = result.data.login;
 
-    // Guardar token y usuario
+    // --- GUARDADO DE DATOS (Mantenemos los tuyos y aseguramos el email) ---
     localStorage.setItem("jwt", token);
-    localStorage.setItem("usuarioActivo", usuario.nombre); // Mantener compatibilidad con almacenaje.js
-    localStorage.setItem("usuarioEmail", usuario.email);
+    localStorage.setItem("usuarioActivo", usuario.nombre);
     localStorage.setItem("usuarioRol", usuario.role);
+    localStorage.setItem("usuarioEmail", usuario.email || emailValue);
 
-    // Exito
-    mostrarUsuarioActivo();
+    // --- ACTUALIZACIÓN INMEDIATA DEL HEADER (Opcional pero recomendado) ---
+    // Si el header ya existe en la página de login, se verá el nombre antes de redirigir
+    const headerNombre = document.getElementById("usuario-logueado-span");
+    if (headerNombre) headerNombre.textContent = usuario.nombre;
 
+    alerta.classList.replace("alert-danger", "alert-success");
+    alerta.innerHTML = `¡Bienvenido ${usuario.nombre}! Redirigiendo...`;
     alerta.classList.remove("d-none");
-    alerta.classList.remove("alert-danger");
-    alerta.classList.add("alert-success");
-    alerta.innerHTML = `¡Sesión iniciada correctamente!<br>Bienvenid@, ${usuario.nombre}.`;
 
-    // Redirigir al dashboard después de 1 segundo
+    // Mantenemos tu lógica de redirección por roles
     setTimeout(() => {
-      window.location.href = "../../index.html";
+      if (usuario.role === "ADMIN") {
+        window.location.href =
+          window.location.origin + "/src/pages/usuarios.html";
+      } else {
+        window.location.href =
+          window.location.origin + "/src/pages/dashboard.html";
+      }
     }, 1000);
   } catch (error) {
-    alerta.innerHTML = `<ul><li>${error.message}</li></ul>`;
+    alerta.classList.add("alert-danger");
+    alerta.classList.remove("alert-success");
+    alerta.innerHTML = `Error: ${error.message}`;
     alerta.classList.remove("d-none");
-    passwordInput.value = "";
   }
 }
 
-document.addEventListener("DOMContentLoaded", function () {
-  mostrarUsuarioActivo();
-});
-
-// Exponer la función globalmente para que listener.js pueda llamarla
 window.manejarLogin = manejarLogin;
-window.mostrarUsuarioActivo = mostrarUsuarioActivo;

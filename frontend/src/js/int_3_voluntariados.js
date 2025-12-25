@@ -1,5 +1,18 @@
+/**
+ * voluntariados.js
+ * Maneja la lógica de consulta, creación y borrado de voluntariados.
+ */
+
+// Protección de ruta: si no hay token, al login.
+if (!localStorage.getItem("jwt")) {
+  window.location.href = "login.html";
+}
+
 (() => {
-  const GRAPHQL_ENDPOINT = "https://hrmfz4-5000.csb.app/graphql";
+  // 1. USAR EL ENDPOINT DINÁMICO DEFINIDO EN ALMACENAJE.JS
+  const GRAPHQL_ENDPOINT =
+    window.GRAPHQL_ENDPOINT ||
+    `https://${window.location.host.replace("-4000", "-5000")}/graphql`;
 
   async function graphqlRequest(query, variables = {}) {
     const token = localStorage.getItem("jwt");
@@ -25,66 +38,158 @@
     return result.data;
   }
 
+  // --- QUERIES Y MUTATIONS ---
   const GET_VOLUNTARIADOS = `
-  query Voluntariados {
-    voluntariados {
-      id
-      titulo
-      usuario
-      fecha
-      descripcion
-      tipo
+    query Voluntariados {
+      voluntariados {
+        id
+        titulo
+        usuario
+        fecha
+        descripcion
+        tipo
+        imagen
+      }
     }
-  }
-`;
+  `;
 
   const CREATE_VOLUNTARIADO = `
-  mutation CrearVoluntariado($titulo: String!, $usuario: String!, $fecha: String!, $descripcion: String!, $tipo: TipoVoluntariado!) {
-    crearVoluntariado(titulo: $titulo, usuario: $usuario, fecha: $fecha, descripcion: $descripcion, tipo: $tipo) {
-      id
-      titulo
-      usuario
-      fecha
-      descripcion
-      tipo
+    mutation CrearVoluntariado($titulo: String!, $usuario: String!, $fecha: String!, $descripcion: String!, $tipo: TipoVoluntariado!, $imagen: String) {
+      crearVoluntariado(titulo: $titulo, usuario: $usuario, fecha: $fecha, descripcion: $descripcion, tipo: $tipo, imagen: $imagen) {
+        id
+        titulo
+      }
     }
-  }
-`;
+  `;
 
   const DELETE_VOLUNTARIADO = `
-  mutation EliminarVoluntariado($id: ID!) {
-    eliminarVoluntariado(id: $id)
+    mutation EliminarVoluntariado($id: ID!) {
+      eliminarVoluntariado(id: $id)
+    }
+  `;
+
+  // --- LÓGICA DE INTERFAZ ---
+
+  async function obtenerVoluntariados() {
+    const data = await graphqlRequest(GET_VOLUNTARIADOS);
+    return data.voluntariados || [];
   }
-`;
 
-  /**
-   * Cuenta el número de 'oferta' y 'peticion' en la lista de voluntariados.
-   * @param {Array<Object>} lista - Lista de voluntariados.
-   * @returns {Object} Un objeto con los conteos: { Oferta: number, Peticion: number }.
-   */
-  function contarTiposVoluntariado(lista) {
-    const conteos = {
-      Oferta: 0,
-      Peticion: 0,
-    };
+  async function mostrarDatosVoluntariados() {
+    const cuerpo = document.querySelector("#consultaVoluntariados");
+    if (!cuerpo) return;
 
-    lista.forEach((v) => {
-      const tipoNormalizado = v.tipo ? v.tipo.toLowerCase() : "";
+    cuerpo.innerHTML =
+      '<tr><td colspan="7" class="text-center">Cargando...</td></tr>';
 
-      if (tipoNormalizado === "oferta") {
-        conteos.Oferta++;
-      } else if (tipoNormalizado === "peticion") {
-        conteos.Peticion++;
+    try {
+      const lista = await obtenerVoluntariados();
+      cuerpo.innerHTML = "";
+
+      lista.forEach((v) => {
+        const imagenHtml = v.imagen
+          ? `<img src="${v.imagen}" alt="foto" style="width:50px; height:50px; object-fit:cover; border-radius:4px;">`
+          : '<span class="text-muted">N/D</span>';
+
+        const fila = `
+          <tr>
+            <td>${v.titulo}</td>
+            <td>${v.usuario}</td>
+            <td>${v.fecha}</td>
+            <td>${v.descripcion}</td>
+            <td>${v.tipo}</td>
+            <td>${imagenHtml}</td>
+            <td>
+              <button class="btn btn-danger btn-sm" onclick="eliminarVoluntariado('${v.id}')">
+                Borrar
+              </button>
+            </td>
+          </tr>
+        `;
+        cuerpo.innerHTML += fila;
+      });
+
+      if (lista.length === 0) {
+        cuerpo.innerHTML =
+          '<tr><td colspan="7" class="text-center">No hay datos.</td></tr>';
       }
-    });
 
+      const conteos = contarTiposVoluntariado(lista);
+      dibujarGrafico(conteos);
+    } catch (error) {
+      console.error("Error cargando tabla:", error);
+      cuerpo.innerHTML =
+        '<tr><td colspan="7" class="text-center text-danger">Error de conexión con el servidor.</td></tr>';
+    }
+  }
+
+  function leerArchivo(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = (error) => reject(error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function addVoluntariado(event) {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    const titulo = document.getElementById("titulo").value;
+    const usuario = document.getElementById("usuario").value;
+    const fecha = document.getElementById("fecha").value;
+    const descripcion = document.getElementById("descripcion").value;
+    const tipo = document.getElementById("tipo").value.toUpperCase();
+
+    const inputImagen = document.getElementById("imagen");
+    let imagenData = "";
+
+    if (inputImagen && inputImagen.files && inputImagen.files[0]) {
+      try {
+        imagenData = await leerArchivo(inputImagen.files[0]);
+      } catch (e) {
+        console.error("Error leyendo imagen", e);
+      }
+    }
+
+    try {
+      await graphqlRequest(CREATE_VOLUNTARIADO, {
+        titulo,
+        usuario,
+        fecha,
+        descripcion,
+        tipo,
+        imagen: imagenData,
+      });
+      document.getElementById("alta").reset();
+      await mostrarDatosVoluntariados();
+    } catch (error) {
+      alert("Error al crear: " + error.message);
+    }
+  }
+
+  async function eliminarVoluntariado(id) {
+    if (!confirm("¿Eliminar este registro?")) return;
+    try {
+      await graphqlRequest(DELETE_VOLUNTARIADO, { id });
+      await mostrarDatosVoluntariados();
+    } catch (error) {
+      alert("Error al eliminar: " + error.message);
+    }
+  }
+
+  function contarTiposVoluntariado(lista) {
+    const conteos = { Oferta: 0, Peticion: 0 };
+    lista.forEach((v) => {
+      if (v.tipo?.toLowerCase() === "oferta") conteos.Oferta++;
+      else if (v.tipo?.toLowerCase() === "peticion") conteos.Peticion++;
+    });
     return conteos;
   }
 
-  /**
-   * Dibuja un gráfico de barras simple en el canvas para mostrar la distribución.
-   * @param {Object} data - Objeto con los conteos de tipos.
-   */
   function dibujarGrafico(data) {
     const canvas = document.getElementById("voluntariadoChart");
     if (!canvas) return;
@@ -97,7 +202,6 @@
     const maxVal = Math.max(data.Oferta, data.Peticion, 1);
 
     ctx.clearRect(0, 0, width, height);
-
     ctx.beginPath();
     ctx.moveTo(padding, padding);
     ctx.lineTo(padding, height - padding);
@@ -112,9 +216,6 @@
     ctx.fillText("Oferta", padding + barWidth, height - padding / 2);
     ctx.fillText("Petición", padding + barWidth * 3, height - padding / 2);
 
-    ctx.textAlign = "right";
-    ctx.fillText("Cantidad", padding - 5, padding - 10);
-
     const valores = [data.Oferta, data.Peticion];
     const colores = ["#0E1353", "#330328"];
 
@@ -125,172 +226,22 @@
 
       ctx.fillStyle = colores[index];
       ctx.fillRect(x, y, barWidth, barHeight);
-
       ctx.fillStyle = "#000";
-      ctx.textAlign = "center";
       ctx.fillText(valor.toString(), x + barWidth / 2, y - 5);
     });
   }
 
-  async function obtenerVoluntariados() {
-    const data = await graphqlRequest(GET_VOLUNTARIADOS);
-    return data.voluntariados || [];
-  }
-
-  function mostrarEstadoTabla(mensaje, clase = "text-muted") {
-    const cuerpo = document.querySelector("#consultaVoluntariados");
-    if (!cuerpo) return;
-    cuerpo.innerHTML = `
-    <tr>
-      <td colspan="7" class="text-center ${clase}">${mensaje}</td>
-    </tr>
-  `;
-  }
-
-  /**
-   * Muestra los datos de los voluntariados en la tabla de Consulta y Borrado (voluntariados.html).
-   */
-  async function mostrarDatosVoluntariados() {
-    const alerta = document.getElementById("alertaErrores");
-    alerta.classList.add("d-none");
-    alerta.classList.remove("error-con-icono");
-    alerta.innerHTML = "";
-
-    mostrarEstadoTabla("Cargando voluntariados...");
-
-    try {
-      const lista = await obtenerVoluntariados();
-      const cuerpo = document.querySelector("#consultaVoluntariados");
-      cuerpo.innerHTML = "";
-
-      let delay = 0;
-
-      lista.forEach((v) => {
-        const imagenDisplay = `<span class="text-muted">No disponible</span>`;
-        const fila = `
-        <tr class="fade-in-right" style="--d:${delay}ms">
-          <td>${v.titulo}</td>
-          <td>${v.usuario}</td>
-          <td>${v.fecha}</td>
-          <td>${v.descripcion}</td>
-          <td>${v.tipo}</td>
-          <td>${imagenDisplay}</td>
-          <td>
-            <button class="btn btn-primary bg-custom-blue w-100"
-                    onclick="eliminarVoluntariado('${v.id}')">
-              Borrar
-            </button>
-          </td>
-        </tr>
-      `;
-        cuerpo.innerHTML += fila;
-        delay += 100;
-      });
-
-      if (lista.length === 0) {
-        mostrarEstadoTabla("No hay voluntariados disponibles.");
-      }
-
-      const conteos = contarTiposVoluntariado(lista);
-      dibujarGrafico(conteos);
-    } catch (error) {
-      mostrarEstadoTabla("Error al cargar voluntariados.", "text-danger");
-      alerta.innerHTML = `<ul><li>${error.message}</li></ul>`;
-      alerta.classList.add("error-con-icono");
-      alerta.classList.remove("d-none");
+  // Carga inicial
+  document.addEventListener("DOMContentLoaded", () => {
+    // LLAMADA A UTILS PARA EL HEADER
+    if (typeof inicializarInterfazUsuario === "function") {
+      inicializarInterfazUsuario();
+      setTimeout(inicializarInterfazUsuario, 500);
     }
-  }
-
-  /**
-   * Añade un nuevo registro de voluntariado mediante GraphQL.
-   * @returns {Promise<void>}
-   */
-  async function addVoluntariado() {
-    const titulo = document.getElementById("titulo").value.trim();
-    const usuario = document.getElementById("usuario").value.trim();
-    const fecha = document.getElementById("fecha").value;
-    const descripcion = document.getElementById("descripcion").value.trim();
-    const tipoInput = document.getElementById("tipo").value;
-
-    const alerta = document.getElementById("alertaErrores");
-    alerta.classList.add("d-none");
-    alerta.innerHTML = "";
-
-    const errores = [];
-
-    if (!titulo) errores.push("<li>El campo Título es obligatorio.</li>");
-    if (!usuario) errores.push("<li>El campo Usuario es obligatorio.</li>");
-    if (!fecha) errores.push("<li>El campo Fecha es obligatorio.</li>");
-    if (!descripcion)
-      errores.push("<li>El campo Descripción es obligatorio.</li>");
-    if (!tipoInput)
-      errores.push("<li>Debes seleccionar un Tipo de voluntariado.</li>");
-
-    if (errores.length > 0) {
-      alerta.innerHTML = "Errores:<ul>" + errores.join("") + "</ul>";
-      alerta.classList.remove("d-none");
-      alerta.classList.add("error-con-icono");
-      return;
-    }
-
-    const tipo = tipoInput.toUpperCase();
-
-    try {
-      setVoluntariadosLoading(true);
-      await graphqlRequest(CREATE_VOLUNTARIADO, {
-        titulo,
-        usuario,
-        fecha,
-        descripcion,
-        tipo,
-      });
-
-      document.getElementById("alta").reset();
-      await mostrarDatosVoluntariados();
-    } catch (error) {
-      alerta.innerHTML = `<ul><li>${error.message}</li></ul>`;
-      alerta.classList.remove("d-none");
-      alerta.classList.add("error-con-icono");
-    } finally {
-      setVoluntariadosLoading(false);
-    }
-  }
-
-  /**
-   * Elimina un registro de voluntariado usando su ID.
-   * @param {string} id - El ID del voluntariado a eliminar.
-   */
-  async function eliminarVoluntariado(id) {
-    const alerta = document.getElementById("alertaErrores");
-    alerta.classList.add("d-none");
-    alerta.classList.remove("error-con-icono");
-    alerta.innerHTML = "";
-
-    try {
-      setVoluntariadosLoading(true);
-      await graphqlRequest(DELETE_VOLUNTARIADO, { id });
-      await mostrarDatosVoluntariados();
-    } catch (error) {
-      alerta.innerHTML = `<ul><li>${error.message}</li></ul>`;
-      alerta.classList.remove("d-none");
-      alerta.classList.add("error-con-icono");
-    } finally {
-      setVoluntariadosLoading(false);
-    }
-  }
-
-  function setVoluntariadosLoading(isLoading) {
-    const submitButton = document.querySelector('#alta input[type="submit"]');
-    if (submitButton) {
-      submitButton.disabled = isLoading;
-    }
-  }
-
-  document.addEventListener("DOMContentLoaded", async function () {
-    await mostrarDatosVoluntariados();
+    mostrarDatosVoluntariados();
   });
 
   window.addVoluntariado = addVoluntariado;
-  window.mostrarDatosVoluntariados = mostrarDatosVoluntariados;
   window.eliminarVoluntariado = eliminarVoluntariado;
+  window.mostrarDatosVoluntariados = mostrarDatosVoluntariados;
 })();

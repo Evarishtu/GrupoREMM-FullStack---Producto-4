@@ -56,32 +56,38 @@ if (isCodeSandbox) {
 
 /**
  * Middleware para parsear cuerpos JSON en las peticiones entrantes.
+ * Se han añadido límites de 10mb para soportar imágenes en Base64.
  */
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: "10mb" }));
+app.use(bodyParser.urlencoded({ limit: "10mb", extended: true }));
 
 const allowedOrigins = [
   "http://localhost:5500",
   "https://localhost:5500",
-  "https://hrmfz4-4000.csb.app",
+  "https://ngt8z4-4000.csb.app",
 ];
 
+// backend/server.js
 const corsOptions = {
-  origin: (origin, callback) => {
-    // Permet peticions sense Origin (curl, Postman, alguns redirects)
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-
-    return callback(new Error("Not allowed by CORS"));
+  origin: function (origin, callback) {
+    // Permitir si no hay origen (como Postman) o si es de CodeSandbox
+    if (
+      !origin ||
+      origin.includes(".csb.app") ||
+      origin.includes("localhost")
+    ) {
+      callback(null, true);
+    } else {
+      callback(new Error("No permitido por CORS"));
+    }
   },
   credentials: true,
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 };
 
-// IMPORTANT: abans de routes
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+app.options("*", cors(corsOptions)); // Responder a las peticiones pre-vuelo
 
 const io = new Server(httpServer, {
   cors: {

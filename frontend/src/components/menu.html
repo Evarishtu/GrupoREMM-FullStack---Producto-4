@@ -1,29 +1,67 @@
 <header>
-    <nav class="navbar navbar-expand-md navbar-light shadow-sm custom-navbar-desktop">
-        <div class="container-fluid container-xl">
-            <a class="navbar-brand fw-bold" data-href="./index.html">VoluntariadoREMM</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <i class="fas fa-bars" id="menu-icon"></i>
-            </button>
-            <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
-                <ul class="navbar-nav align-items-center">
-                    <li class="nav-item">
-                        <a class="nav-link fade-in" style="--d:100ms" data-href="./index.html">Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link fade-in" style="--d:100ms" data-href="./src/pages/login.html">Login</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link fade-in" style="--d:100ms" data-href="./src/pages/voluntariados.html">Voluntariado</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link fade-in" style="--d:100ms" data-href="./src/pages/usuarios.html">Alta de usuario</a>
-                    </li>
-                    <li class="nav-item">
-                        <span class="nav-link fade-in" style="--d:100ms" id="usuario-logueado">-no login-</span>
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </nav>
+  <nav
+    class="navbar navbar-expand-md navbar-light shadow-sm custom-navbar-desktop"
+  >
+    <div class="container-fluid container-xl">
+      <a
+        class="navbar-brand fw-bold"
+        id="nav-logo"
+        data-href="/index.html"
+        style="cursor: pointer"
+      >
+        VoluntariadoREMM
+      </a>
+      <button
+        class="navbar-toggler"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#navbarNav"
+      >
+        <i class="fas fa-bars" id="menu-icon"></i>
+      </button>
+
+      <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+        <ul class="navbar-nav align-items-center">
+          <li class="nav-item" id="nav-dashboard-item" style="display: none">
+            <a class="nav-link fade-in" data-href="/src/pages/dashboard.html"
+              >Dashboard</a
+            >
+          </li>
+          <li
+            class="nav-item"
+            id="nav-voluntariados-item"
+            style="display: none"
+          >
+            <a
+              class="nav-link fade-in"
+              data-href="/src/pages/voluntariados.html"
+              >Voluntariado</a
+            >
+          </li>
+          <li class="nav-item" id="nav-usuarios-item" style="display: none">
+            <a class="nav-link fade-in" data-href="/src/pages/usuarios.html"
+              >Gestión Usuarios</a
+            >
+          </li>
+          <li class="nav-item" id="nav-login-item">
+            <a class="nav-link fade-in" data-href="/src/pages/login.html"
+              >Login</a
+            >
+          </li>
+          <li class="nav-item me-3" id="nav-user-info" style="display: none">
+            <span class="nav-link disabled text-primary fw-bold">
+              <i class="fa-solid fa-circle-user me-1"></i>
+              <span id="usuario-logueado-span"></span>
+            </span>
+          </li>
+
+          <li class="nav-item" id="nav-logout-item" style="display: none">
+            <a class="nav-link text-danger" href="#" id="logout-btn">
+              <i class="fa-solid fa-right-from-bracket"></i> Salir
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
 </header>

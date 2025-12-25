@@ -19,7 +19,8 @@
       "command": "cd frontend && npx serve .",
       "runAtStart": true,
       "preview": {
-        "port": 4000
+        "port": 4000,
+        "path": "/" 
       }
     }
   }

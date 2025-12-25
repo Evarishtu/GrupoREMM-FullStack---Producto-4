@@ -17,6 +17,7 @@ export const schema = buildSchema(`
         nombre: String!
         email: String!
         role: String!
+        password: String  # <--- AÑADIDO: Necesario para que el front lo consulte
     }
 
     """
@@ -46,6 +47,7 @@ export const schema = buildSchema(`
         fecha: String!
         descripcion: String!
         tipo: TipoVoluntariado!
+        imagen: String
     }
 
     """
@@ -82,7 +84,8 @@ export const schema = buildSchema(`
         """
         Crea un nuevo usuario en el sistema.
         """
-        crearUsuario(nombre: String!, email: String!, password: String!): Usuario!
+        # <--- ACTUALIZADO: Añadido role para que se guarde correctamente
+        crearUsuario(nombre: String!, email: String!, password: String!, role: String): Usuario!
 
         """
         Elimina un usuario específico por su email.
@@ -107,7 +110,8 @@ export const schema = buildSchema(`
             usuario: String!,
             fecha: String!,
             descripcion: String!,
-            tipo: TipoVoluntariado!
+            tipo: TipoVoluntariado!,
+            imagen: String
         ): Voluntariado!
 
         """
@@ -120,7 +124,8 @@ export const schema = buildSchema(`
             usuario: String,
             fecha: String,
             descripcion: String,
-            tipo: TipoVoluntariado
+            tipo: TipoVoluntariado,
+            imagen: String
         ): String!
 
         """
@@ -133,7 +138,8 @@ export const schema = buildSchema(`
             usuario: String,
             fecha: String,
             descripcion: String,
-            tipo: TipoVoluntariado
+            tipo: TipoVoluntariado,
+            imagen: String
         ): String!
 
         """
