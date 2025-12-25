@@ -1,5 +1,3 @@
-// int_1_dashboard.js
-
 if (!localStorage.getItem("jwt")) {
   window.location.href = window.location.origin + "/src/pages/login.html";
 }

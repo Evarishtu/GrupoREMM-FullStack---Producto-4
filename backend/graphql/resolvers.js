@@ -132,10 +132,8 @@ export const root = {
    * @param {{nombre: string, email: string, password: string}} args
    * @returns {Promise<{id: string, nombre: string, email: string}>}
    */
-  // ANTES: crearUsuario: async ({ nombre, email, password }) => {
-  // DESPUÉS:
+
   crearUsuario: async ({ nombre, email, password, role }) => {
-    // <--- AÑADE "role" AQUÍ
     if (!nombre || !email || !password) {
       throw new Error("Faltan datos obligatorios para crear el usuario");
     }
@@ -151,8 +149,8 @@ export const root = {
       nombre,
       email,
       password: hashed,
-      passwordOriginal: password, // El campo que añadimos para el "ojo"
-      role: role || "USER", // Ahora "role" ya existe y se puede usar
+      passwordOriginal: password,
+      role: role || "USER",
     });
 
     return {

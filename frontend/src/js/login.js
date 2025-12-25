@@ -46,13 +46,13 @@ async function manejarLogin() {
 
     const { token, usuario } = result.data.login;
 
-    // --- GUARDADO DE DATOS (Mantenemos los tuyos y aseguramos el email) ---
+    // Guardado de datos (Mantenemos los tuyos y aseguramos el email)
     localStorage.setItem("jwt", token);
     localStorage.setItem("usuarioActivo", usuario.nombre);
     localStorage.setItem("usuarioRol", usuario.role);
     localStorage.setItem("usuarioEmail", usuario.email || emailValue);
 
-    // --- ACTUALIZACIÓN INMEDIATA DEL HEADER (Opcional pero recomendado) ---
+    // Actualización inmediata del Header (Opcional pero recomendado)
     // Si el header ya existe en la página de login, se verá el nombre antes de redirigir
     const headerNombre = document.getElementById("usuario-logueado-span");
     if (headerNombre) headerNombre.textContent = usuario.nombre;
@@ -61,7 +61,7 @@ async function manejarLogin() {
     alerta.innerHTML = `¡Bienvenido ${usuario.nombre}! Redirigiendo...`;
     alerta.classList.remove("d-none");
 
-    // Mantenemos tu lógica de redirección por roles
+    // Mantenemos la lógica de redirección por roles
     setTimeout(() => {
       if (usuario.role === "ADMIN") {
         window.location.href =

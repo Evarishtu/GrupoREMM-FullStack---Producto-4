@@ -19,7 +19,6 @@ import session from "express-session";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-//import { createServer } from "https";
 import http from "http";
 import https from "https";
 import { Server } from "socket.io";
@@ -41,11 +40,9 @@ let httpServer;
 
 if (isCodeSandbox) {
   console.log("codesandbox");
-  // CodeSandbox: HTTP intern (el proxy ja et dona HTTPS públic)
   httpServer = http.createServer(app);
 } else {
   console.log("localhost");
-  // Local: HTTPS self-signed
   const keyPath = path.join(process.cwd(), "certs", "dev.key");
   const certPath = path.join(process.cwd(), "certs", "dev.crt");
   httpServer = https.createServer(

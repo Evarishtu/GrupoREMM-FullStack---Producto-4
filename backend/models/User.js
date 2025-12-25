@@ -17,7 +17,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    // AÑADIDO: Campo para guardar la contraseña en texto plano para el Admin
+    // Campo para guardar la contraseña en texto plano para el Admin
     passwordOriginal: {
       type: String,
     },

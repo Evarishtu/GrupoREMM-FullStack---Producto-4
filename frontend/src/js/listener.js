@@ -4,7 +4,7 @@
  */
 
 document.addEventListener("DOMContentLoaded", function () {
-  // --- 1. LOGIN ---
+  // Login
   const form_login = document.getElementById("login");
   const loginButton = document.getElementById("loginButton");
 
@@ -22,13 +22,13 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // --- 3. CARGA INICIAL DE TABLAS ---
+  // Carga inicial de tablas
   // Si estamos en la página de usuarios, cargamos la lista automáticamente
   if (document.getElementById("tablaUsuarios")) {
     if (typeof pintarUsuarios === "function") pintarUsuarios();
   }
 
-  // --- 4. EVENTOS DE BORRADO (Delegación de eventos) ---
+  // Eventos de borrado (Delegación de eventos)
   // Usamos delegación porque los botones de borrar se crean dinámicamente
   const tablaUsuarios = document.getElementById("tablaUsuarios");
   if (tablaUsuarios) {
@@ -38,7 +38,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (
           confirm(`¿Estás seguro de que deseas borrar al usuario ${email}?`)
         ) {
-          // CAMBIO AQUÍ: Usamos eliminarUsuario que es la que tienes en int_4_usuarios.js
+          // Usamos eliminarUsuario que es la que tenemos en int_4_usuarios.js
           if (typeof eliminarUsuario === "function") {
             eliminarUsuario(email);
           } else if (typeof borrarUsuarioPorEmail === "function") {
@@ -50,7 +50,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // --- 5. CERRAR SESIÓN ---
+  // Cerrar Sesión
   const btnLogout = document.getElementById("btnLogout");
   if (btnLogout) {
     btnLogout.addEventListener("click", function (e) {
@@ -64,7 +64,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // --- 6. VOLUNTARIADOS ---
+  // Voluntariados
   const form_voluntariados = document.getElementById("alta");
   if (form_voluntariados) {
     form_voluntariados.addEventListener("submit", function (evento) {

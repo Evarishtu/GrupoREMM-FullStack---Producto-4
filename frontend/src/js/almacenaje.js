@@ -162,5 +162,5 @@ async function existeEmailUsuario(email) {
   }
 }
 
-// IMPORTANTE: Exportar la función al objeto window
+// Exportamos la función al objeto window
 window.existeEmailUsuario = existeEmailUsuario;

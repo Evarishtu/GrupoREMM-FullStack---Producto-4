@@ -15,7 +15,7 @@ function addMenu() {
 
       menuContainer.innerHTML = data;
 
-      // --- CORRECCIÓN DE RUTAS DUPLICADAS ---
+      // Corrección de rutas duplicadas
       document
         .querySelectorAll("#menu a[data-href], #menu .navbar-brand[data-href]")
         .forEach((link) => {

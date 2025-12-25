@@ -214,17 +214,17 @@ function setUsuariosLoading(isLoading) {
  * Conecta con la lógica global de utils.js
  */
 document.addEventListener("DOMContentLoaded", function () {
-  // 1. LLAMADA A UTILS: Inyecta el nombre y configura el header global
+  // Llamada a Utils: Inyecta el nombre y configura el header global
   if (typeof inicializarInterfazUsuario === "function") {
     inicializarInterfazUsuario();
     // Re-intento por si el menú (navbar) carga de forma asíncrona
     setTimeout(inicializarInterfazUsuario, 500);
   }
 
-  // 2. Carga de la tabla de la página actual
+  // Carga de la tabla de la página actual
   mostrarDatosUsuarios();
 
-  // 3. Manejo del formulario de alta (limpieza de duplicados)
+  // Manejo del formulario de alta (limpieza de duplicados)
   const form = document.getElementById("altaUsuario");
   if (form) {
     const formClon = form.cloneNode(true);

@@ -9,7 +9,7 @@ if (!localStorage.getItem("jwt")) {
 }
 
 (() => {
-  // 1. USAR EL ENDPOINT DINÁMICO DEFINIDO EN ALMACENAJE.JS
+  // Usar el endpoint dinámico definido en almacenaje.js
   const GRAPHQL_ENDPOINT =
     window.GRAPHQL_ENDPOINT ||
     `https://${window.location.host.replace("-4000", "-5000")}/graphql`;
@@ -38,7 +38,7 @@ if (!localStorage.getItem("jwt")) {
     return result.data;
   }
 
-  // --- QUERIES Y MUTATIONS ---
+  // Queries y Mutations
   const GET_VOLUNTARIADOS = `
     query Voluntariados {
       voluntariados {
@@ -68,7 +68,7 @@ if (!localStorage.getItem("jwt")) {
     }
   `;
 
-  // --- LÓGICA DE INTERFAZ ---
+  // Lógica de Interfaz
 
   async function obtenerVoluntariados() {
     const data = await graphqlRequest(GET_VOLUNTARIADOS);
@@ -233,7 +233,7 @@ if (!localStorage.getItem("jwt")) {
 
   // Carga inicial
   document.addEventListener("DOMContentLoaded", () => {
-    // LLAMADA A UTILS PARA EL HEADER
+    // Llamada a Utils para el Header
     if (typeof inicializarInterfazUsuario === "function") {
       inicializarInterfazUsuario();
       setTimeout(inicializarInterfazUsuario, 500);
