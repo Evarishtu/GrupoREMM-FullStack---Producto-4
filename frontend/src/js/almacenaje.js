@@ -1,27 +1,28 @@
-var GRAPHQL_ENDPOINT = window.GRAPHQL_ENDPOINT || 'https://localhost:4000/graphql';
+var GRAPHQL_ENDPOINT =
+  window.GRAPHQL_ENDPOINT || "https://hrmfz4-5000.csb.app/graphql";
 window.GRAPHQL_ENDPOINT = GRAPHQL_ENDPOINT;
-const CLAVE_USUARIO_ACTIVO = 'usuarioActivo';
+const CLAVE_USUARIO_ACTIVO = "usuarioActivo";
 
 async function graphqlRequest(query, variables = {}) {
-  const token = localStorage.getItem('jwt');
+  const token = localStorage.getItem("jwt");
   const headers = {
-    'Content-Type': 'application/json'
+    "Content-Type": "application/json",
   };
 
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
   const response = await fetch(GRAPHQL_ENDPOINT, {
-    method: 'POST',
+    method: "POST",
     headers,
-    credentials: 'include',
-    body: JSON.stringify({ query, variables })
+    credentials: "include",
+    body: JSON.stringify({ query, variables }),
   });
 
   const result = await response.json();
   if (result.errors) {
-    throw new Error(result.errors.map((e) => e.message).join('\n'));
+    throw new Error(result.errors.map((e) => e.message).join("\n"));
   }
   return result.data;
 }
@@ -108,7 +109,7 @@ function guardarUsuarioActivo(nombre) {
   try {
     localStorage.setItem(CLAVE_USUARIO_ACTIVO, nombre);
   } catch (error) {
-    console.error('Error al guardar el usuario activo:', error);
+    console.error("Error al guardar el usuario activo:", error);
   }
 }
 
@@ -120,7 +121,7 @@ function obtenerUsuarioActivo() {
   try {
     return localStorage.getItem(CLAVE_USUARIO_ACTIVO);
   } catch (error) {
-    console.error('Error al obtener el usuario activo:', error);
+    console.error("Error al obtener el usuario activo:", error);
     return null;
   }
 }
@@ -132,7 +133,7 @@ function limpiarUsuarioActivo() {
   try {
     localStorage.removeItem(CLAVE_USUARIO_ACTIVO);
   } catch (error) {
-    console.error('Error al limpiar el usuario activo:', error);
+    console.error("Error al limpiar el usuario activo:", error);
   }
 }
 

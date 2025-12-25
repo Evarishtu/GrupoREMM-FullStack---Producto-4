@@ -4,8 +4,8 @@
  * @returns {boolean} True si el email es válido.
  */
 function esEmailValido(email) {
-    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/; 
-    return regex.test(email);
+  const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return regex.test(email);
 }
 
 /**
@@ -14,6 +14,6 @@ function esEmailValido(email) {
  * @returns {boolean} True si la contraseña es válida.
  */
 function esPasswordValido(password) {
-    const regex = /^[a-zA-Z0-9]{8}$/; 
-    return regex.test(password);
+  const regex = /^[a-zA-Z0-9]{8,12}$/;
+  return regex.test(password);
 }

@@ -19,7 +19,9 @@ import session from "express-session";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { createServer } from "https";
+//import { createServer } from "https";
+import http from "http";
+import https from "https";
 import { Server } from "socket.io";
 
 import { schema } from "./graphql/schema.js";
@@ -33,22 +35,62 @@ import { connectMongo } from "./database/mongoose.js";
  * @type {Express}
  */
 const app = express();
-const keyPath = path.join(process.cwd(), "certs", "dev.key");
-const certPath = path.join(process.cwd(), "certs", "dev.crt");
+const isCodeSandbox = !!process.env.CODESANDBOX;
 
-const httpServer = createServer(
-  {
-    key: fs.readFileSync(keyPath),
-    cert: fs.readFileSync(certPath),
+let httpServer;
+
+if (isCodeSandbox) {
+  console.log("codesandbox");
+  // CodeSandbox: HTTP intern (el proxy ja et dona HTTPS públic)
+  httpServer = http.createServer(app);
+} else {
+  console.log("localhost");
+  // Local: HTTPS self-signed
+  const keyPath = path.join(process.cwd(), "certs", "dev.key");
+  const certPath = path.join(process.cwd(), "certs", "dev.crt");
+  httpServer = https.createServer(
+    { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) },
+    app
+  );
+}
+
+/**
+ * Middleware para parsear cuerpos JSON en las peticiones entrantes.
+ */
+app.use(bodyParser.json());
+
+const allowedOrigins = [
+  "http://localhost:5500",
+  "https://localhost:5500",
+  "https://hrmfz4-4000.csb.app",
+];
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Permet peticions sense Origin (curl, Postman, alguns redirects)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+
+    return callback(new Error("Not allowed by CORS"));
   },
-  app
-);
-const allowedOrigins = ["http://localhost:5500", "https://localhost:5500"];
+  credentials: true,
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
+
+// IMPORTANT: abans de routes
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 const io = new Server(httpServer, {
   cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST"],
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error("Not allowed by CORS"));
+    },
+    methods: ["GET", "POST", "OPTIONS"],
     credentials: true,
   },
 });
@@ -87,21 +129,6 @@ io.on("connection", (socket) => {
 const port = process.env.PORT || 4000;
 
 /**
- * Middleware para parsear cuerpos JSON en las peticiones entrantes.
- */
-app.use(bodyParser.json());
-
-/**
- * Middleware CORS que permite peticiones desde cualquier origen.
- */
-app.use(
-  cors({
-    origin: allowedOrigins,
-    credentials: true,
-  })
-);
-
-/**
  * Middleware de sesión para mantener estado de usuario en servidor.
  */
 app.use(
@@ -111,7 +138,8 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: "none",
+      secure: true,
     },
   })
 );
@@ -155,6 +183,11 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use((req, res, next) => {
+  console.log("REQ", req.method, req.url, "ORIGIN", req.headers.origin);
+  next();
+});
+
 /**
  * Middleware GraphQL principal en la ruta /graphql.
  * Expone la API GraphQL completa con interfaz GraphiQL en desarrollo.
@@ -177,7 +210,7 @@ async function startServer() {
   await connectMongo();
 
   httpServer.listen(port, () => {
-    console.log(`Servidor escuchando en https://localhost:${port}`);
+    console.log(`Servidor escuchando en el puerto ${port}`);
   });
 }
 

@@ -3,14 +3,14 @@
  */
 function mostrarUsuarioActivo() {
   const usuario_activo = obtenerUsuarioActivo();
-  const campo = document.getElementById('usuario-logueado');
+  const campo = document.getElementById("usuario-logueado");
 
   if (!campo) return;
 
   if (usuario_activo) {
     campo.textContent = usuario_activo;
   } else {
-    campo.textContent = '-no login-';
+    campo.textContent = "-no login-";
   }
 }
 
@@ -19,35 +19,37 @@ function mostrarUsuarioActivo() {
  * gestiona mensajes de error/éxito y actualiza el estado del usuario activo.
  */
 async function manejarLogin() {
-  const emailInput = document.getElementById('id');
-  const passwordInput = document.getElementById('pass');
-  const alerta = document.getElementById('alertaErrores');
+  const emailInput = document.getElementById("id");
+  const passwordInput = document.getElementById("pass");
+  const alerta = document.getElementById("alertaErrores");
 
   // Reset alerta
-  alerta.classList.add('d-none');
-  alerta.classList.remove('alert-success');
-  alerta.classList.add('alert-danger');
-  alerta.innerHTML = '';
+  alerta.classList.add("d-none");
+  alerta.classList.remove("alert-success");
+  alerta.classList.add("alert-danger");
+  alerta.innerHTML = "";
 
   const email = emailInput.value.trim();
   const password = passwordInput.value;
   let errores = [];
 
   if (!email) {
-    errores.push('<li>El campo Email es obligatorio.</li>');
+    errores.push("<li>El campo Email es obligatorio.</li>");
   } else if (!esEmailValido(email)) {
-    errores.push('<li>El formato del Email no es correcto.</li>');
+    errores.push("<li>El formato del Email no es correcto.</li>");
   }
 
   if (!password) {
-    errores.push('<li>El campo Contraseña es obligatorio.</li>');
+    errores.push("<li>El campo Contraseña es obligatorio.</li>");
   } else if (!esPasswordValido(password)) {
-    errores.push('<li>La contraseña debe tener exactamente 8 caracteres alfanuméricos.</li>');
+    errores.push(
+      "<li>La contraseña debe tener exactamente 8 caracteres alfanuméricos.</li>"
+    );
   }
 
   if (errores.length > 0) {
-    alerta.innerHTML = 'Errores:<ul>' + errores.join('') + '</ul>';
-    alerta.classList.remove('d-none');
+    alerta.innerHTML = "Errores:<ul>" + errores.join("") + "</ul>";
+    alerta.classList.remove("d-none");
     return;
   }
 
@@ -65,15 +67,15 @@ async function manejarLogin() {
       }
     `;
 
-    const response = await fetch('https://localhost:4000/graphql', {
-      method: 'POST',
+    const response = await fetch("https://hrmfz4-5000.csb.app/graphql", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json'
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         query,
-        variables: { email, password }
-      })
+        variables: { email, password },
+      }),
     });
 
     const result = await response.json();
@@ -85,32 +87,31 @@ async function manejarLogin() {
     const { token, usuario } = result.data.login;
 
     // Guardar token y usuario
-    localStorage.setItem('jwt', token);
-    localStorage.setItem('usuarioActivo', usuario.nombre); // Mantener compatibilidad con almacenaje.js
-    localStorage.setItem('usuarioEmail', usuario.email);
-    localStorage.setItem('usuarioRol', usuario.role);
+    localStorage.setItem("jwt", token);
+    localStorage.setItem("usuarioActivo", usuario.nombre); // Mantener compatibilidad con almacenaje.js
+    localStorage.setItem("usuarioEmail", usuario.email);
+    localStorage.setItem("usuarioRol", usuario.role);
 
     // Exito
     mostrarUsuarioActivo();
 
-    alerta.classList.remove('d-none');
-    alerta.classList.remove('alert-danger');
-    alerta.classList.add('alert-success');
+    alerta.classList.remove("d-none");
+    alerta.classList.remove("alert-danger");
+    alerta.classList.add("alert-success");
     alerta.innerHTML = `¡Sesión iniciada correctamente!<br>Bienvenid@, ${usuario.nombre}.`;
 
     // Redirigir al dashboard después de 1 segundo
     setTimeout(() => {
-      window.location.href = '../../index.html';
+      window.location.href = "../../index.html";
     }, 1000);
-
   } catch (error) {
     alerta.innerHTML = `<ul><li>${error.message}</li></ul>`;
-    alerta.classList.remove('d-none');
-    passwordInput.value = '';
+    alerta.classList.remove("d-none");
+    passwordInput.value = "";
   }
 }
 
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener("DOMContentLoaded", function () {
   mostrarUsuarioActivo();
 });
 
