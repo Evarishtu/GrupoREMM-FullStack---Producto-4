@@ -37,31 +37,49 @@ function inicializarInterfazUsuario() {
   const itemDashboard = document.getElementById("nav-dashboard-item");
   const itemVoluntariados = document.getElementById("nav-voluntariados-item");
 
-  // Si hay un usuario logueado, ajustamos la visibilidad
-  if (nombre && spanNombre && contenedorInfo) {
-    // Inyectamos el nombre en el span
-    spanNombre.textContent = nombre;
-
-    // Mostramos info de usuario y botón salir
-    contenedorInfo.style.setProperty("display", "block", "important");
+  // Usuario NO logueado
+  if (!nombre || !localStorage.getItem("jwt")) {
+    if (itemLogin) itemLogin.style.setProperty("display", "block", "important");
+    if (contenedorInfo)
+      contenedorInfo.style.setProperty("display", "none", "important");
     if (itemLogout)
-      itemLogout.style.setProperty("display", "block", "important");
-
-    // Ocultamos el botón de Login
-    if (itemLogin) itemLogin.style.setProperty("display", "none", "important");
-
-    // Mostramos Dashboard y Voluntariados para cualquier usuario logueado
+      itemLogout.style.setProperty("display", "none", "important");
     if (itemDashboard)
-      itemDashboard.style.setProperty("display", "block", "important");
+      itemDashboard.style.setProperty("display", "none", "important");
+    if (itemVoluntariados)
+      itemVoluntariados.style.setProperty("display", "none", "important");
+    if (itemUsuarios)
+      itemUsuarios.style.setProperty("display", "none", "important");
+    return;
+  }
+
+  // Usuario logueado (Cualquier rol)
+  if (spanNombre) spanNombre.textContent = nombre;
+  if (contenedorInfo)
+    contenedorInfo.style.setProperty("display", "block", "important");
+  if (itemLogout) itemLogout.style.setProperty("display", "block", "important");
+  if (itemLogin) itemLogin.style.setProperty("display", "none", "important");
+
+  // Dashboard lo ven todos los logueados
+  if (itemDashboard)
+    itemDashboard.style.setProperty("display", "block", "important");
+
+  if (rol === "ADMIN") {
+    // Si es ADMIN, mostramos ambas gestiones
     if (itemVoluntariados)
       itemVoluntariados.style.setProperty("display", "block", "important");
-
-    // Lógica de Rol: Solo el ADMIN ve Gestión de Usuarios
-    if (rol === "ADMIN" && itemUsuarios) {
+    if (itemUsuarios)
       itemUsuarios.style.setProperty("display", "block", "important");
-    }
+  } else {
+    // Si no es ADMIN, ocultamos explícitamente ambas
+    if (itemVoluntariados)
+      itemVoluntariados.style.setProperty("display", "none", "important");
+    if (itemUsuarios)
+      itemUsuarios.style.setProperty("display", "none", "important");
   }
 }
 
-// Hacemos la función disponible globalmente
+// Hacer disponibles globalmente
 window.inicializarInterfazUsuario = inicializarInterfazUsuario;
+window.esEmailValido = esEmailValido;
+window.esPasswordValido = esPasswordValido;
